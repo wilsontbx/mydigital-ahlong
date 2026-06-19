@@ -1,0 +1,95 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Owe Money Pay Money (Ah Long Tag) Pattern -->
+    <pattern id="osp" x="0" y="0" width="140" height="140" patternUnits="userSpaceOnUse" patternTransform="rotate(-20)">
+      <text x="10" y="60" font-family="'Courier New', Courier, monospace" font-weight="900" font-size="38" fill="#047857" opacity="0.6">O$P$</text>
+      <text x="80" y="130" font-family="'Courier New', Courier, monospace" font-weight="900" font-size="38" fill="#047857" opacity="0.6">O$P$</text>
+    </pattern>
+    <linearGradient id="gold" x1="96" y1="116" x2="416" y2="436" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FEF08A"/>
+      <stop offset="0.4" stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#9A3412"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="18"/>
+      <feGaussianBlur stdDeviation="15"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.35 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+  </defs>
+
+  <!-- App Icon Base -->
+  <rect width="512" height="512" rx="112" fill="#059669"/>
+  <rect width="512" height="512" rx="112" fill="url(#osp)"/>
+  <rect x="8" y="8" width="496" height="496" rx="104" stroke="white" stroke-opacity="0.1" stroke-width="6"/>
+
+  <!-- Core Graphic: The Thug Ah Long Coin -->
+  <g filter="url(#shadow)">
+    <!-- The Coin Base -->
+    <circle cx="256" cy="266" r="176" fill="url(#gold)"/>
+    
+    <!-- Coin Inner Rings -->
+    <circle cx="256" cy="266" r="146" fill="none" stroke="#D97706" stroke-width="12" stroke-dasharray="24 16"/>
+    <circle cx="256" cy="266" r="126" fill="none" stroke="#F59E0B" stroke-width="8"/>
+
+    <!-- The $ Sign representing the Face/Nose/Mouth -->
+    <text x="256" y="376" font-family="Helvetica, Arial, sans-serif" font-weight="900" font-size="190" text-anchor="middle" fill="#D97706">RM</text>
+
+    <!-- Thug Life Glasses (Deal With It) -->
+    <g transform="translate(121, 166)">
+      <!-- Left Frame side -->
+      <rect x="-10" y="25" width="20" height="15" fill="#111827"/>
+      
+      <!-- Left Lens Base -->
+      <path d="M10,20 H110 V70 H80 V90 H40 V70 H10 Z" fill="#111827"/>
+      
+      <!-- Pixels dripping down from Left lens -->
+      <rect x="30" y="90" width="15" height="15" fill="#111827"/>
+      <rect x="60" y="90" width="15" height="15" fill="#111827"/>
+      
+      <!-- Left Lens Glare -->
+      <rect x="30" y="35" width="25" height="15" fill="white"/>
+      <rect x="65" y="35" width="15" height="15" fill="white"/>
+
+      <!-- Center Bridge -->
+      <rect x="110" y="30" width="50" height="20" fill="#111827"/>
+
+      <!-- Right Lens Base -->
+      <path d="M160,20 H260 V70 H230 V90 H190 V70 H160 Z" fill="#111827"/>
+      
+      <!-- Pixels dripping down from Right lens -->
+      <rect x="180" y="90" width="15" height="15" fill="#111827"/>
+      <rect x="210" y="90" width="15" height="15" fill="#111827"/>
+      
+      <!-- Right Lens Glare -->
+      <rect x="180" y="35" width="25" height="15" fill="white"/>
+      <rect x="220" y="35" width="15" height="15" fill="white"/>
+
+      <!-- Right Frame side -->
+      <rect x="260" y="25" width="20" height="15" fill="#111827"/>
+    </g>
+
+    <!-- Thug Spliff / Cigar -->
+    <!-- Positioned cleverly in the bottom right curve of the RM text -->
+    <g transform="translate(306, 326) rotate(-12)">
+      <!-- Blunt Base -->
+      <path d="M0,0 L100,-10 L106,12 L0,18 Z" fill="#E5E7EB"/>
+      <path d="M0,4 L100,-6 L106,-1 L0,12 Z" fill="#9CA3AF"/>
+      
+      <!-- Cherry (Red tip) -->
+      <path d="M70,-7 L100,-10 L106,12 L76,14 Z" fill="#EF4444"/>
+      
+      <!-- Ash / Glow effect fake -->
+      <path d="M90,-9 L100,-10 L106,12 L96,11 Z" fill="#FCA5A5"/>
+
+      <!-- Smoke -->
+      <circle cx="120" cy="-20" r="12" fill="none" stroke="#D1D5DB" stroke-width="5" opacity="0.8"/>
+      <circle cx="140" cy="-45" r="20" fill="none" stroke="#9CA3AF" stroke-width="6" opacity="0.6"/>
+      <circle cx="170" cy="-75" r="28" fill="none" stroke="#E5E7EB" stroke-width="8" opacity="0.3"/>
+    </g>
+
+  </g>
+</svg>

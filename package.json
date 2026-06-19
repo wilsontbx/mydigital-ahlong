@@ -1,0 +1,25 @@
+{
+	"name": "mydigital-ahlong",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc --noEmit && vite build",
+		"preview": "vite preview",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"fflate": "^0.8.3",
+		"firebase": "^12.15.0"
+	},
+	"devDependencies": {
+		"@vitest/coverage-v8": "^4.1.8",
+		"jsdom": "^29.1.1",
+		"typescript": "^6.0.3",
+		"vite": "^6.0.0",
+		"vitest": "^4.1.8"
+	}
+}
