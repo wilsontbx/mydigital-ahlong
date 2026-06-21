@@ -21,7 +21,7 @@ function getPayment(state: GroupState, name: string): string {
 	return member?.payment || "";
 }
 
-function formatDate(ts: number): string {
+function formatDate(ts: number, includeTime = true): string {
 	if (!ts) return "";
 	const d = new Date(ts);
 	const now = new Date();
@@ -30,11 +30,15 @@ function formatDate(ts: number): string {
 	yesterday.setDate(yesterday.getDate() - 1);
 	const isYesterday = d.toDateString() === yesterday.toDateString();
 
-	const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+	const diffMs = now.getTime() - d.getTime();
+	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-	if (isToday) return `Today ${time}`;
-	if (isYesterday) return `Yesterday ${time}`;
-	return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + ` ${time}`;
+	const time = includeTime ? " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "";
+
+	if (isToday) return `Today${time}`;
+	if (isYesterday) return `Yesterday${time}`;
+	if (diffDays < 7) return `${diffDays} days ago${time}`;
+	return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + time;
 }
 
 // --- Currency order (local) ---
@@ -123,13 +127,36 @@ export function renderExpenseForm(state: GroupState): void {
 	currSel.innerHTML = getOrderedCurrencies()
 		.map((c) => `<option value="${c.code}">${c.symbol} ${c.code}</option>`)
 		.join("");
+
+	const now = new Date();
+	const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+	const dateInput = $("#expense-date") as HTMLInputElement;
+	if (dateInput) {
+		dateInput.max = today;
+		if (!dateInput.value) dateInput.value = today;
+	}
+	const filterFrom = document.getElementById("filter-date-from") as HTMLInputElement | null;
+	const filterTo = document.getElementById("filter-date-to") as HTMLInputElement | null;
+	if (filterFrom) filterFrom.max = today;
+	if (filterTo) filterTo.max = today;
 }
+
+const CATEGORY_ICONS: Record<string, string> = {
+	food: "🍔",
+	transport: "🚗",
+	accommodation: "🏨",
+	shopping: "🛍️",
+	entertainment: "🎬",
+	utilities: "💡",
+	other: "📦",
+};
 
 export function renderExpenses(state: GroupState): void {
 	const list = $("#expenses-list");
 	const activeExpenses = state.expenses.filter((e) => !e.deleted);
 	if (!activeExpenses.length) {
 		list.innerHTML = '<p class="empty">🎶 nothing here yet... go spend some money</p>';
+		renderCategoryBreakdown([]);
 		return;
 	}
 	// Find which expenses are locked (came before a settlement of the same currency)
@@ -138,38 +165,168 @@ export function renderExpenses(state: GroupState): void {
 	for (let i = activeExpenses.length - 1; i >= 0; i--) {
 		const exp = activeExpenses[i];
 		const cur = exp.currency || "MYR";
-		if (exp.desc.startsWith("💸 Settlement")) {
+		if (exp.type === "settlement") {
 			settledCurrencies.add(cur);
 		}
-		if (settledCurrencies.has(cur) && !exp.desc.startsWith("💸 Settlement")) {
+		if (settledCurrencies.has(cur) && exp.type !== "settlement") {
 			lockedIds.add(exp.id);
 		}
 	}
 
-	const visible = activeExpenses.filter((e) => !e.desc.startsWith("💸 Settlement"));
-	if (!visible.length) {
-		list.innerHTML = '<p class="empty">🎶 nothing here yet... go spend some money</p>';
+	const visible = activeExpenses.filter((e) => e.type !== "settlement");
+
+	// Apply filters
+	const filterCat = (document.getElementById("filter-category") as HTMLSelectElement | null)?.value || "";
+	const filterFrom = (document.getElementById("filter-date-from") as HTMLInputElement | null)?.value || "";
+	const filterTo = (document.getElementById("filter-date-to") as HTMLInputElement | null)?.value || "";
+
+	const filtered = visible.filter((e) => {
+		if (filterCat) {
+			if (filterCat === "uncategorized") {
+				if (e.category) return false;
+			} else if (e.category !== filterCat) return false;
+		}
+		const expDate = e.date || e.createdAt;
+		if (filterFrom && expDate < new Date(filterFrom).getTime()) return false;
+		if (filterTo && expDate > new Date(filterTo).getTime() + 86400000) return false;
+		return true;
+	});
+
+	// Sort by date, then createdAt as tiebreaker for same date
+	const sortBtn = document.getElementById("filter-sort");
+	const sortAsc = sortBtn?.dataset.sort === "asc";
+	filtered.sort((a, b) => {
+		const dateA = a.date || a.createdAt;
+		const dateB = b.date || b.createdAt;
+		if (dateA !== dateB) return sortAsc ? dateA - dateB : dateB - dateA;
+		return sortAsc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt;
+	});
+
+	renderCategoryBreakdown(filtered);
+
+	if (!filtered.length) {
+		list.innerHTML = '<p class="empty">no expenses match your filters 🔍</p>';
 		return;
 	}
 
-	list.innerHTML = visible
+	// Track settlements: accumulate how much each person has settled to another per currency
+	// Only count settlements that came AFTER an expense to determine that expense's status
+	const settlementsByTime: { from: string; to: string; currency: string; amount: number; createdAt: number }[] = [];
+	for (const exp of activeExpenses) {
+		if (exp.type !== "settlement") continue;
+		settlementsByTime.push({ from: exp.paidBy, to: exp.splitAmong[0], currency: exp.currency || "MYR", amount: exp.amount, createdAt: exp.createdAt });
+	}
+
+	list.innerHTML = filtered
 		.map((e) => {
-			const canDelete = !lockedIds.has(e.id);
+			const catIcon = e.category ? CATEGORY_ICONS[e.category] || "" : "";
+			const displayDate = e.date ? formatDate(e.date, false) : formatDate(e.createdAt, false);
+			const splitType = e.splitType || "equal";
+			const sym = getSymbol(e.currency);
+			const cur = e.currency || "MYR";
+
+			// Calculate per-member owed amounts and how much they've settled AFTER this expense
+			const memberOwed: { name: string; owed: number; paid: number }[] = [];
+			for (const s of e.splitAmong) {
+				if (s === e.paidBy) continue;
+				let owed = 0;
+				if (splitType === "equal") {
+					owed = e.amount / e.splitAmong.length;
+				} else if (splitType === "exact" && e.splitValues) {
+					owed = e.splitValues[s] || 0;
+				} else if (splitType === "percent" && e.splitValues) {
+					owed = (e.amount * (e.splitValues[s] || 0)) / 100;
+				}
+				// Sum settlements from this person to payer, same currency, created after this expense
+				const paid = settlementsByTime
+					.filter((st) => st.from === s && st.to === e.paidBy && st.currency === cur && st.createdAt >= e.createdAt)
+					.reduce((sum, st) => sum + st.amount, 0);
+				memberOwed.push({ name: s, owed, paid: Math.min(paid, owed) });
+			}
+			const totalOwed = memberOwed.reduce((sum, m) => sum + m.owed, 0);
+			const totalPaid = memberOwed.reduce((sum, m) => sum + m.paid, 0);
+			const isFullySettled = totalOwed > 0 && Math.abs(totalPaid - totalOwed) < 0.01;
+			const isPartial = totalPaid > 0.01 && !isFullySettled;
+
+			let statusHtml = "";
+			if (totalOwed > 0) {
+				const pct = Math.min((totalPaid / totalOwed) * 100, 100);
+				const statusClass = isFullySettled ? "settle-full" : isPartial ? "settle-partial" : "settle-pending";
+				const statusLabel = isFullySettled ? "✅ Settled" : isPartial ? `⏳ ${sym}${totalPaid.toFixed(2)} / ${sym}${totalOwed.toFixed(2)}` : `💤 ${sym}${totalOwed.toFixed(2)} owed`;
+				const unpaid = memberOwed.filter((m) => m.paid < m.owed - 0.01);
+				const unpaidText = unpaid.length && !isFullySettled ? ` · ${unpaid.map((m) => `${getAvatar(state, m.name)} ${esc(m.name)}`).join(", ")} unpaid` : "";
+				statusHtml = `<div class="expense-settle-status ${statusClass}">
+					<div class="settle-bar"><div class="settle-bar-fill" style="width:${pct.toFixed(0)}%"></div></div>
+					<span class="settle-label">${statusLabel}${unpaidText}</span>
+				</div>`;
+			}
+
+			let splitDetails: string[] = [];
+			if (splitType === "equal") {
+				const share = e.amount / e.splitAmong.length;
+				splitDetails = e.splitAmong.map((s) => {
+					const m = memberOwed.find((x) => x.name === s);
+					const paidTag = m ? (m.paid >= m.owed - 0.01 ? " ✅" : m.paid > 0 ? ` (paid ${sym}${m.paid.toFixed(2)})` : "") : "";
+					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(s)}: <b>${sym}${share.toFixed(2)}</b>${paidTag}</span>`;
+				});
+			} else if (splitType === "exact" && e.splitValues) {
+				splitDetails = e.splitAmong.map((s) => {
+					const m = memberOwed.find((x) => x.name === s);
+					const paidTag = m ? (m.paid >= m.owed - 0.01 ? " ✅" : m.paid > 0 ? ` (paid ${sym}${m.paid.toFixed(2)})` : "") : "";
+					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(s)}: <b>${sym}${(e.splitValues![s] || 0).toFixed(2)}</b>${paidTag}</span>`;
+				});
+			} else if (splitType === "percent" && e.splitValues) {
+				splitDetails = e.splitAmong.map((s) => {
+					const m = memberOwed.find((x) => x.name === s);
+					const paidTag = m ? (m.paid >= m.owed - 0.01 ? " ✅" : m.paid > 0 ? ` (paid ${sym}${m.paid.toFixed(2)})` : "") : "";
+					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(s)}: <b>${(e.splitValues![s] || 0).toFixed(1)}%</b> (${sym}${((e.amount * (e.splitValues![s] || 0)) / 100).toFixed(2)})${paidTag}</span>`;
+				});
+			}
+			const badgeClass = splitType === "equal" ? "split-type-badge split-type-equal" : "split-type-badge";
+
 			return `
-    <div class="expense-item">
+    <div class="expense-item" data-expense-id="${e.id}">
       <div class="expense-info">
-        <strong>${esc(e.desc)}</strong>
-        <span class="expense-amount">${getSymbol(e.currency)}${e.amount.toFixed(2)}</span>
+        <strong>${catIcon ? catIcon + " " : ""}${esc(e.desc)}</strong>
+        <span class="expense-amount">${sym}${e.amount.toFixed(2)}</span>
       </div>
       <div class="expense-meta">
-        Paid by ${getAvatar(state, e.paidBy)} <b>${esc(e.paidBy)}</b> · Split: ${e.splitAmong.map((s) => `${getAvatar(state, s)} ${esc(s)}`).join(", ")}
-        <span class="expense-date">${formatDate(e.createdAt)}</span>
+        Paid by ${getAvatar(state, e.paidBy)} <b>${esc(e.paidBy)}</b> · <span class="${badgeClass}" data-split-toggle>${splitType}</span> among ${e.splitAmong.map((s) => `${getAvatar(state, s)}`).join(" ")}
+        <span class="expense-date">${displayDate}</span>
       </div>
-      ${canDelete ? `<button class="btn-expense-delete" data-remove-expense="${e.id}">Delete</button>` : lockedIds.has(e.id) ? `<span class="expense-locked">🔒 settled</span>` : ""}
+      ${statusHtml}
+      <div class="split-details" hidden>${splitDetails.join("")}</div>
     </div>
   `;
 		})
 		.join("");
+}
+
+function renderCategoryBreakdown(expenses: { amount: number; currency: string; category?: string }[]): void {
+	const container = document.getElementById("category-breakdown");
+	if (!container) return;
+	if (!expenses.length) {
+		container.innerHTML = "";
+		return;
+	}
+	const totals: Record<string, Record<string, number>> = {};
+	for (const e of expenses) {
+		const cat = e.category || "uncategorized";
+		if (!totals[cat]) totals[cat] = {};
+		const cur = e.currency || "MYR";
+		totals[cat][cur] = (totals[cat][cur] || 0) + e.amount;
+	}
+	const pills = Object.entries(totals)
+		.sort(([, a], [, b]) => Object.values(b).reduce((s, v) => s + v, 0) - Object.values(a).reduce((s, v) => s + v, 0))
+		.map(([cat, currencies]) => {
+			const icon = CATEGORY_ICONS[cat] || "🏷️";
+			const amounts = Object.entries(currencies)
+				.map(([cur, amt]) => `${getSymbol(cur)}${amt.toFixed(2)}`)
+				.join(" + ");
+			return `<span class="cat-pill">${icon} ${cat} <span class="cat-pill-amount">${amounts}</span></span>`;
+		})
+		.join("");
+	container.innerHTML = pills;
 }
 
 export function renderSettlement(state: GroupState): void {
@@ -230,21 +387,31 @@ export function renderTxnLog(state: GroupState): void {
 		log.innerHTML = '<p class="empty">no transactions yet</p>';
 		return;
 	}
-	const sorted = [...state.expenses].reverse();
-	log.innerHTML = sorted
+	// Build log entries: original + edit entries for edited expenses
+	type LogEntry = { desc: string; amount: number; currency: string; paidBy: string; createdAt: number; deleted: boolean; isSettlement: boolean; isEdit: boolean };
+	const entries: LogEntry[] = [];
+	for (const e of state.expenses) {
+		const isSettlement = e.type === "settlement";
+		entries.push({ desc: e.desc, amount: e.amount, currency: e.currency, paidBy: e.paidBy, createdAt: e.createdAt, deleted: e.deleted, isSettlement, isEdit: false });
+		const isEdited = e.updatedAt && e.updatedAt > e.createdAt + 1000;
+		if (isEdited && !e.deleted) {
+			entries.push({ desc: `Edited: ${e.desc}`, amount: e.amount, currency: e.currency, paidBy: e.paidBy, createdAt: e.updatedAt, deleted: false, isSettlement: false, isEdit: true });
+		}
+	}
+	entries.sort((a, b) => b.createdAt - a.createdAt);
+
+	log.innerHTML = entries
 		.map((e) => {
 			const sym = getSymbol(e.currency);
-			const isSettlement = e.desc.startsWith("💸 Settlement");
-			const isDeleted = e.deleted;
-			const icon = isDeleted ? "❌" : isSettlement ? "🤝" : "🧾";
+			const icon = e.deleted ? "❌" : e.isEdit ? "✏️" : e.isSettlement ? "🤝" : "🧾";
 			return `
-		<div class="txn-item ${isSettlement ? "txn-settlement" : ""} ${isDeleted ? "txn-deleted" : ""}">
+		<div class="txn-item ${e.isSettlement ? "txn-settlement" : ""} ${e.deleted ? "txn-deleted" : ""} ${e.isEdit ? "txn-edited" : ""}">
 			<span class="txn-icon">${icon}</span>
 			<div class="txn-details">
 				<span class="txn-desc">${esc(e.desc)}</span>
 				<span class="txn-meta">${getAvatar(state, e.paidBy)} ${esc(e.paidBy)} · ${formatDate(e.createdAt)}</span>
 			</div>
-			<span class="txn-amount ${isSettlement ? "txn-amount-settle" : ""}">${sym}${e.amount.toFixed(2)}</span>
+			<span class="txn-amount ${e.isSettlement ? "txn-amount-settle" : ""}">${sym}${e.amount.toFixed(2)}</span>
 		</div>`;
 		})
 		.join("");

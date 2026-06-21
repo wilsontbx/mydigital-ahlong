@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addMember, removeMember, renameMember, addExpense, deleteExpense, calcBalances, simplifyDebts } from "./expenses";
+import { addMember, removeMember, renameMember, addExpense, editExpense, deleteExpense, calcBalances, simplifyDebts } from "./expenses";
 import type { GroupState, Member, Expense } from "./types";
 
 function makeState(): GroupState {
@@ -20,12 +20,16 @@ function makeMember(name: string, payment = "", avatar = "😀"): Member {
 function makeExpense(overrides: Partial<Expense> = {}): Expense {
 	return {
 		id: "e1",
+		type: "expense",
 		desc: "Test",
 		amount: 10,
 		paidBy: "Alice",
 		splitAmong: ["Alice", "Bob"],
+		splitType: "equal",
 		currency: "MYR",
+		date: Date.now(),
 		createdAt: Date.now(),
+		updatedAt: Date.now(),
 		deleted: false,
 		...overrides,
 	};
@@ -145,6 +149,90 @@ describe("expenses module", () => {
 		renameMember(state, "Ghost", "NewName");
 
 		expect(state.members[0].name).toBe("Alice");
+	});
+
+	it("addExpense stores splitType, category, and date", () => {
+		const state = makeState();
+		state.members = [makeMember("Alice"), makeMember("Bob")];
+
+		addExpense(state, {
+			desc: "Dinner",
+			amount: 100,
+			paidBy: "Alice",
+			splitAmong: ["Alice", "Bob"],
+			splitType: "exact",
+			splitValues: { Alice: 60, Bob: 40 },
+			currency: "MYR",
+			category: "food",
+			date: 1700000000000,
+		});
+
+		expect(state.expenses[0].splitType).toBe("exact");
+		expect(state.expenses[0].splitValues).toEqual({ Alice: 60, Bob: 40 });
+		expect(state.expenses[0].category).toBe("food");
+		expect(state.expenses[0].date).toBe(1700000000000);
+		expect(state.expenses[0].updatedAt).toBeGreaterThan(0);
+	});
+
+	it("calcBalances handles exact split", () => {
+		const members = [makeMember("Alice"), makeMember("Bob")];
+		const expenses = [
+			makeExpense({
+				id: "e1",
+				amount: 100,
+				paidBy: "Alice",
+				splitAmong: ["Alice", "Bob"],
+				splitType: "exact",
+				splitValues: { Alice: 30, Bob: 70 },
+			}),
+		];
+
+		const balances = calcBalances(expenses, members);
+		expect(balances.Alice).toBeCloseTo(70);
+		expect(balances.Bob).toBeCloseTo(-70);
+	});
+
+	it("calcBalances handles percent split", () => {
+		const members = [makeMember("Alice"), makeMember("Bob")];
+		const expenses = [
+			makeExpense({
+				id: "e1",
+				amount: 200,
+				paidBy: "Alice",
+				splitAmong: ["Alice", "Bob"],
+				splitType: "percent",
+				splitValues: { Alice: 25, Bob: 75 },
+			}),
+		];
+
+		const balances = calcBalances(expenses, members);
+		expect(balances.Alice).toBeCloseTo(150);
+		expect(balances.Bob).toBeCloseTo(-150);
+	});
+
+	it("editExpense updates fields and sets updatedAt", () => {
+		const state = makeState();
+		state.members = [makeMember("Alice"), makeMember("Bob")];
+		state.expenses = [
+			makeExpense({ id: "e1", desc: "Lunch", amount: 30, paidBy: "Alice", splitAmong: ["Alice", "Bob"] }),
+		];
+
+		editExpense(state, "e1", { desc: "Dinner", amount: 50, category: "food" });
+
+		expect(state.expenses[0].desc).toBe("Dinner");
+		expect(state.expenses[0].amount).toBe(50);
+		expect(state.expenses[0].category).toBe("food");
+		expect(state.expenses[0].paidBy).toBe("Alice");
+		expect(state.expenses[0].updatedAt).toBeGreaterThan(0);
+	});
+
+	it("editExpense does nothing for unknown id", () => {
+		const state = makeState();
+		state.expenses = [makeExpense({ id: "e1", desc: "Lunch" })];
+
+		editExpense(state, "unknown", { desc: "Changed" });
+
+		expect(state.expenses[0].desc).toBe("Lunch");
 	});
 
 	it("simplifyDebts minimizes transfers for three members", () => {

@@ -75,17 +75,24 @@ mydigital-ahlong/
 ### Expenses
 
 - Add expenses with description, amount, payer, and split selection
+- **Split types**: Equal, Exact amounts, or Percentage-based splits
+- **Categories**: Food, Transport, Accommodation, Shopping, Entertainment, Utilities, Other
+- **Auto-suggest category**: Detects keywords in description (including Malaysian terms: makan, nasi, mamak, etc.)
+- **Date picker**: Defaults to today, cannot select future dates
 - Multi-currency support (MYR, SGD, USD, EUR, GBP, THB, JPY, KRW, IDR, AUD, CAD)
+- **Filters**: Filter by category and date range, with sort toggle (Newest/Oldest)
+- **Category breakdown**: Shows spending totals per category above the expense list
+- **Settlement status**: Progress bar per expense showing how much has been paid back and who hasn't paid
+- **Split details**: Click the split badge to expand per-person breakdown with settlement indicators
 - Soft-delete expenses (logged as "❌ Deleted" in transaction log)
 - Expenses locked after settlement per currency (settling MYR only locks MYR expenses)
-- Only the person who added an expense can delete it
 
 ### Debt Settlement
 
 - **Simplified debts** algorithm (minimizes number of transactions)
 - Grouped by currency
-- Click a debt to see a meme modal shaming the debtor 💀
 - "Mark as Settled" adds a settlement expense entry
+- Per-expense settlement tracking: progress bar shows partial/full payment status
 - Celebration screen when all debts are cleared
 
 ### Sharing & Sync
@@ -180,11 +187,11 @@ Base URL: `/mydigital-ahlong/`
 
 ### Expense Logic (`src/core/expenses.ts`)
 
-- `addExpense()` — creates timestamped expense with unique ID
-- `removeExpense()` — removes by ID
+- `addExpense()` — creates timestamped expense with unique ID, supports splitType (equal/exact/percent), splitValues, category, date
+- `deleteExpense()` — soft-deletes by ID
 - `addMember()` / `removeMember()` — manages group members
 - `renameMember()` — renames member across all expenses and member list
-- `calcBalances()` — computes net balance per member
+- `calcBalances()` — computes net balance per member, handles equal/exact/percent split types
 - `simplifyDebts()` — greedy algorithm to minimize settlement transactions (sort creditors/debtors, settle largest pairs first)
 
 ### Render Layer (`src/ui/render.ts`)
@@ -233,29 +240,40 @@ Base URL: `/mydigital-ahlong/`
 
 ## Data Model
 
-```js
-// Group state
+```ts
+// Expense interface
 {
-  name: "The Broke Bunch",
-  members: ["Alice", "Bob", "Charlie"],
-  expenses: [
-    {
-      id: "unique-id",
-      desc: "Lunch",
-      amount: 30.00,
-      paidBy: "Alice",
-      splitAmong: ["Alice", "Bob", "Charlie"],
-      currency: "MYR",
-      addedBy: "Alice",
-      date: "2026-06-11",
-      time: "14:30"
-    }
-  ]
+  id: string;
+  desc: string;
+  amount: number;
+  paidBy: string;
+  splitAmong: string[];
+  splitType: "equal" | "exact" | "percent";
+  splitValues?: Record<string, number>;  // per-member amounts for exact/percent
+  currency: string;
+  category?: string;  // food, transport, accommodation, shopping, entertainment, utilities, other
+  date: number;       // when it happened (timestamp)
+  createdAt: number;  // when recorded
+  updatedAt: number;  // last edit
+  deleted: boolean;
 }
 
-// localStorage (device-only, not shared)
-mydigital-ahlong_payments: { "Alice": "DuitNow 012-345" }
-mydigital-ahlong_avatars: { "Alice": "🦊", "Bob": "🤖" }
+// Member interface
+{
+  name: string;
+  payment: string;   // e.g. "DuitNow 012-345"
+  avatar: string;    // emoji
+}
+
+// GroupState
+{
+  id: string;
+  name: string;
+  members: Member[];
+  expenses: Expense[];
+  createdAt: number;
+  updatedAt: number;
+}
 ```
 
 ---

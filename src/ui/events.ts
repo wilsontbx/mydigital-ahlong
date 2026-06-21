@@ -12,7 +12,7 @@ import {
 	getCachedGroup,
 	removeCachedGroup,
 } from "../core/state";
-import { addMember, removeMember, addExpense, deleteExpense, renameMember } from "../core/expenses";
+import { addMember, removeMember, addExpense, editExpense, deleteExpense, renameMember } from "../core/expenses";
 import { showDialog, showMemberMenu } from "./dialogs";
 import { render, renderLanding, getSymbol, setCurrencyOrder, getOrderedCurrencies } from "./render";
 import { trackExpenseForInstall } from "./install";
@@ -23,10 +23,88 @@ function getShareUrl(state: GroupState): string {
 }
 
 export function setupEvents(getState: () => GroupState, setState: (s: GroupState) => void): void {
+	let editingExpenseId: string | null = null;
+
 	const rerender = () => {
 		commit(getState());
 		render(getState());
 	};
+
+	function enterEditMode(id: string) {
+		const expense = getState().expenses.find((ex) => ex.id === id);
+		if (!expense) return;
+		editingExpenseId = id;
+
+		($("#expense-desc") as HTMLInputElement).value = expense.desc;
+		($("#expense-amount") as HTMLInputElement).value = expense.amount.toString();
+		($("#expense-currency") as HTMLSelectElement).value = expense.currency;
+		($("#expense-category") as HTMLSelectElement).value = expense.category || "";
+		const d = new Date(expense.date || expense.createdAt);
+		($("#expense-date") as HTMLInputElement).value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+		($("#paid-by") as HTMLSelectElement).value = expense.paidBy;
+		($("#split-type") as HTMLSelectElement).value = expense.splitType || "equal";
+
+		// Set checkboxes
+		const checkboxes = [...$$("#split-checkboxes input[type=checkbox]")] as HTMLInputElement[];
+		checkboxes.forEach((cb) => {
+			const checked = expense.splitAmong.includes(cb.value);
+			cb.checked = checked;
+			const label = cb.closest(".split-label");
+			if (label) label.classList.toggle("checked", checked);
+		});
+
+		rebuildSplitValues();
+		// Fill split values after rebuild
+		if (expense.splitValues && expense.splitType !== "equal") {
+			setTimeout(() => {
+				const inputs = [...$$("#split-values .split-value-input")] as HTMLInputElement[];
+				for (const input of inputs) {
+					const member = input.dataset.splitMember!;
+					if (expense.splitValues![member] !== undefined) {
+						input.value = expense.splitValues![member].toString();
+					}
+				}
+				updateSplitTotals();
+			}, 0);
+		}
+
+		// Update form UI
+		const form = $("#add-expense-form") as HTMLFormElement;
+		form.classList.add("editing");
+		const submitBtn = form.querySelector("button[type=submit]") as HTMLButtonElement;
+		submitBtn.textContent = "✏️ Save Changes";
+		let cancelBtn = form.querySelector(".btn-cancel-edit") as HTMLButtonElement | null;
+		if (!cancelBtn) {
+			cancelBtn = document.createElement("button");
+			cancelBtn.type = "button";
+			cancelBtn.className = "btn btn-cancel-edit";
+			cancelBtn.textContent = "Cancel";
+			cancelBtn.addEventListener("click", exitEditMode);
+			submitBtn.parentElement!.insertBefore(cancelBtn, submitBtn.nextSibling);
+		}
+		cancelBtn.hidden = false;
+
+		form.scrollIntoView({ behavior: "smooth", block: "start" });
+	}
+
+	function exitEditMode() {
+		editingExpenseId = null;
+		const form = $("#add-expense-form") as HTMLFormElement;
+		form.classList.remove("editing");
+		const submitBtn = form.querySelector("button[type=submit]") as HTMLButtonElement;
+		submitBtn.textContent = "💸 Add Expense";
+		const cancelBtn = form.querySelector(".btn-cancel-edit") as HTMLButtonElement | null;
+		if (cancelBtn) cancelBtn.hidden = true;
+
+		($("#expense-desc") as HTMLInputElement).value = "";
+		($("#expense-amount") as HTMLInputElement).value = "";
+		($("#expense-category") as HTMLSelectElement).value = "";
+		const now = new Date();
+		($("#expense-date") as HTMLInputElement).value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+		($("#split-type") as HTMLSelectElement).value = "equal";
+		$("#split-values").hidden = true;
+		$("#split-values").innerHTML = "";
+	}
 
 	// --- Landing page: Start a Group ---
 	$("#landing-new-group-btn").addEventListener("click", () => {
@@ -184,6 +262,124 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 			const label = cb.closest(".split-label");
 			if (label) label.classList.toggle("checked", checkAll);
 		});
+		rebuildSplitValues();
+	});
+
+	// --- Auto-suggest category ---
+	const CATEGORY_KEYWORDS: Record<string, string[]> = {
+		food: ["lunch", "dinner", "breakfast", "makan", "nasi", "coffee", "kopi", "tea", "restaurant", "cafe", "food", "snack", "burger", "pizza", "sushi", "ramen", "boba", "drink", "beer", "alcohol", "bar", "mamak", "hawker"],
+		transport: ["grab", "taxi", "uber", "petrol", "gas", "fuel", "parking", "toll", "bus", "train", "mrt", "lrt", "flight", "airfare", "airport"],
+		accommodation: ["hotel", "airbnb", "hostel", "stay", "room", "accommodation", "resort", "booking"],
+		shopping: ["shop", "buy", "mall", "store", "clothes", "shoes", "gift", "present", "amazon", "shopee", "lazada"],
+		entertainment: ["movie", "cinema", "concert", "ticket", "game", "karaoke", "bowling", "theme park", "museum", "show"],
+		utilities: ["wifi", "internet", "electric", "water", "bill", "phone", "mobile", "subscription", "netflix", "spotify"],
+	};
+
+	($("#expense-desc") as HTMLInputElement).addEventListener("input", (e) => {
+		const desc = (e.target as HTMLInputElement).value.toLowerCase();
+		if (!desc) return;
+		const catSelect = $("#expense-category") as HTMLSelectElement;
+		if (catSelect.value) return;
+		for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+			if (keywords.some((kw) => desc.includes(kw))) {
+				catSelect.value = category;
+				break;
+			}
+		}
+	});
+
+	// --- Expense filters ---
+	const filterEls = [$("#filter-category"), document.getElementById("filter-date-from"), document.getElementById("filter-date-to")];
+	for (const el of filterEls) {
+		if (el) el.addEventListener("change", () => render(getState()));
+	}
+
+	// --- Sort toggle ---
+	const sortBtn = document.getElementById("filter-sort");
+	if (sortBtn) {
+		sortBtn.addEventListener("click", () => {
+			const isAsc = sortBtn.dataset.sort === "asc";
+			sortBtn.dataset.sort = isAsc ? "desc" : "asc";
+			sortBtn.textContent = isAsc ? "🔽 Newest" : "🔼 Oldest";
+			render(getState());
+		});
+	}
+
+	// --- Split type change ---
+	function rebuildSplitValues() {
+		const splitType = ($("#split-type") as HTMLSelectElement).value;
+		const splitValuesEl = $("#split-values");
+		if (splitType === "equal") {
+			splitValuesEl.hidden = true;
+			splitValuesEl.innerHTML = "";
+		} else {
+			const checked = [...$$("#split-checkboxes input:checked")].map((cb) => (cb as HTMLInputElement).value);
+			if (!checked.length) {
+				splitValuesEl.hidden = true;
+				splitValuesEl.innerHTML = "";
+				return;
+			}
+			// Preserve existing values
+			const existing: Record<string, string> = {};
+			const inputs = [...$$("#split-values .split-value-input")] as HTMLInputElement[];
+			for (const input of inputs) {
+				if (input.value) existing[input.dataset.splitMember!] = input.value;
+			}
+			const currency = ($("#expense-currency") as HTMLSelectElement).value;
+			const sym = getSymbol(currency);
+			const isPercent = splitType === "percent";
+			splitValuesEl.hidden = false;
+			splitValuesEl.innerHTML = checked
+				.map(
+					(name) => `
+				<div class="split-value-row">
+					<span class="split-value-name">${name}</span>
+					${!isPercent ? `<span class="split-value-prefix">${sym}</span>` : ""}
+					<input type="number" step="0.01" min="0" class="split-value-input" data-split-member="${name}" placeholder="0" value="${existing[name] || ""}" />
+					${isPercent ? `<span class="split-value-suffix">%</span><span class="split-value-calc" data-calc-member="${name}"></span>` : ""}
+				</div>`,
+				)
+				.join("") + `<div class="split-value-total"><span class="split-value-total-label">Total:</span><span class="split-value-total-amount">0${isPercent ? "%" : ` ${sym}`}</span></div>`;
+			updateSplitTotals();
+		}
+	}
+
+	function updateSplitTotals() {
+		const splitType = ($("#split-type") as HTMLSelectElement).value;
+		if (splitType === "equal") return;
+		const inputs = [...$$("#split-values .split-value-input")] as HTMLInputElement[];
+		const total = inputs.reduce((sum, el) => sum + (parseFloat(el.value) || 0), 0);
+		const currency = ($("#expense-currency") as HTMLSelectElement).value;
+		const sym = getSymbol(currency);
+		const amount = parseFloat(($("#expense-amount") as HTMLInputElement).value) || 0;
+		const isPercent = splitType === "percent";
+
+		const totalEl = document.querySelector(".split-value-total-amount");
+		if (totalEl) {
+			const target = isPercent ? 100 : amount;
+			const isValid = Math.abs(total - target) <= 0.01;
+			totalEl.textContent = isPercent ? `${total.toFixed(1)}% / 100%` : `${sym}${total.toFixed(2)} / ${sym}${amount.toFixed(2)}`;
+			totalEl.classList.toggle("split-total-valid", isValid);
+			totalEl.classList.toggle("split-total-invalid", !isValid && total > 0);
+		}
+
+		if (isPercent) {
+			for (const input of inputs) {
+				const member = input.dataset.splitMember!;
+				const pct = parseFloat(input.value) || 0;
+				const calcEl = document.querySelector(`[data-calc-member="${member}"]`);
+				if (calcEl) calcEl.textContent = amount ? `= ${sym}${((amount * pct) / 100).toFixed(2)}` : "";
+			}
+		}
+	}
+
+	$("#split-type").addEventListener("change", rebuildSplitValues);
+	$("#split-values").addEventListener("input", updateSplitTotals);
+	($("#expense-amount") as HTMLInputElement).addEventListener("input", updateSplitTotals);
+
+	// --- Update split values when checkboxes change ---
+	$("#split-checkboxes").addEventListener("change", () => {
+		rebuildSplitValues();
 	});
 
 	// --- Add expense ---
@@ -193,6 +389,10 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 		const amount = parseFloat(($("#expense-amount") as HTMLInputElement).value);
 		const paidBy = ($("#paid-by") as HTMLSelectElement).value;
 		const currency = ($("#expense-currency") as HTMLSelectElement).value;
+		const category = ($("#expense-category") as HTMLSelectElement).value || undefined;
+		const dateStr = ($("#expense-date") as HTMLInputElement).value;
+		const date = dateStr ? new Date(dateStr).getTime() : undefined;
+		const splitType = ($("#split-type") as HTMLSelectElement).value as "equal" | "exact" | "percent";
 		const splitAmong = [...$$("#split-checkboxes input:checked")].map((cb) => (cb as HTMLInputElement).value);
 
 		if (!desc || !amount || !paidBy || !splitAmong.length) {
@@ -200,29 +400,172 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 			return;
 		}
 
-		addExpense(getState(), { desc, amount, paidBy, splitAmong, currency });
-		($("#expense-desc") as HTMLInputElement).value = "";
-		($("#expense-amount") as HTMLInputElement).value = "";
-		rerender();
-		showToast(`🧧 Added: ${desc} (${getSymbol(currency)}${amount.toFixed(2)})`);
-		trackExpenseForInstall();
+		let splitValues: Record<string, number> | undefined;
+		if (splitType !== "equal") {
+			splitValues = {};
+			const inputs = $$("#split-values .split-value-input") as NodeListOf<HTMLInputElement>;
+			for (const input of inputs) {
+				const member = input.dataset.splitMember!;
+				splitValues[member] = parseFloat(input.value) || 0;
+			}
+			const total = Object.values(splitValues).reduce((a, b) => a + b, 0);
+			if (splitType === "percent" && Math.abs(total - 100) > 0.01) {
+				showDialog({ type: "error", title: `Percentages must add up to 100% (currently ${total.toFixed(1)}%) 🧮` });
+				return;
+			}
+			if (splitType === "exact" && Math.abs(total - amount) > 0.01) {
+				showDialog({ type: "error", title: `Exact amounts must add up to ${amount.toFixed(2)} (currently ${total.toFixed(2)}) 🧮` });
+				return;
+			}
+		}
+
+		if (editingExpenseId) {
+			editExpense(getState(), editingExpenseId, { desc, amount, paidBy, splitAmong, splitType, splitValues, currency, category, date });
+			exitEditMode();
+			rerender();
+			showToast(`✏️ Updated: ${desc} (${getSymbol(currency)}${amount.toFixed(2)})`);
+		} else {
+			addExpense(getState(), { desc, amount, paidBy, splitAmong, splitType, splitValues, currency, category, date });
+			($("#expense-desc") as HTMLInputElement).value = "";
+			($("#expense-amount") as HTMLInputElement).value = "";
+			($("#expense-category") as HTMLSelectElement).value = "";
+			const now = new Date();
+			($("#expense-date") as HTMLInputElement).value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+			($("#split-type") as HTMLSelectElement).value = "equal";
+			$("#split-values").hidden = true;
+			$("#split-values").innerHTML = "";
+			rerender();
+			showToast(`🧧 Added: ${desc} (${getSymbol(currency)}${amount.toFixed(2)})`);
+			trackExpenseForInstall();
+		}
 	});
 
-	// --- Delete expense ---
+	// --- Long press on expense → action menu (Edit / Delete) ---
+	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+	let longPressItem: HTMLElement | null = null;
+
+	function isExpenseLocked(id: string): boolean {
+		const state = getState();
+		const activeExpenses = state.expenses.filter((e) => !e.deleted);
+		const expense = activeExpenses.find((e) => e.id === id);
+		if (!expense) return false;
+		if (expense.type === "settlement") return true;
+		const cur = expense.currency || "MYR";
+		// Locked if any settlement exists after this expense for same currency between involved parties
+		for (const exp of activeExpenses) {
+			if (exp.type !== "settlement") continue;
+			if ((exp.currency || "MYR") !== cur) continue;
+			if (exp.createdAt < expense.createdAt) continue;
+			// Settlement involves the payer of this expense
+			if (exp.splitAmong[0] === expense.paidBy) return true;
+		}
+		return false;
+	}
+
+	function showExpenseActions(item: HTMLElement) {
+		const id = item.dataset.expenseId;
+		if (!id) return;
+		const expense = getState().expenses.find((ex) => ex.id === id);
+		if (!expense) return;
+		if (navigator.vibrate) navigator.vibrate(30);
+		item.classList.remove("long-press-active");
+
+		if (isExpenseLocked(id)) {
+			showDialog({ type: "error", title: "This expense is locked — it was settled already 🔒" });
+			return;
+		}
+
+		showDialog({
+			type: "confirm",
+			title: `"${expense.desc}" — what do?`,
+			onConfirm: () => {
+				enterEditMode(id);
+			},
+			onCancel: () => {},
+		});
+		// Override dialog buttons for Edit/Delete
+		const buttonsEl = document.getElementById("dialog-buttons");
+		if (buttonsEl) {
+			buttonsEl.innerHTML = `
+				<button class="btn dialog-btn-edit">✏️ Edit</button>
+				<button class="btn dialog-btn-delete">🗑️ Delete</button>
+				<button class="btn dialog-btn-cancel">nvm</button>
+			`;
+			buttonsEl.querySelector<HTMLButtonElement>(".dialog-btn-edit")!.onclick = () => {
+				document.getElementById("dialog-modal")!.hidden = true;
+				enterEditMode(id);
+			};
+			buttonsEl.querySelector<HTMLButtonElement>(".dialog-btn-delete")!.onclick = () => {
+				document.getElementById("dialog-modal")!.hidden = true;
+				showDialog({
+					type: "confirm",
+					title: `Delete "${expense.desc}"? 🗑️`,
+					onConfirm: () => {
+						deleteExpense(getState(), id);
+						rerender();
+					},
+				});
+			};
+			buttonsEl.querySelector<HTMLButtonElement>(".dialog-btn-cancel")!.onclick = () => {
+				document.getElementById("dialog-modal")!.hidden = true;
+			};
+		}
+	}
+
+	const expensesList = $("#expenses-list");
+
+	expensesList.addEventListener("touchstart", (e) => {
+		const item = (e.target as HTMLElement).closest(".expense-item") as HTMLElement | null;
+		if (!item || !item.dataset.expenseId) return;
+		if (isExpenseLocked(item.dataset.expenseId)) return;
+		longPressItem = item;
+		item.classList.add("long-press-active");
+		longPressTimer = setTimeout(() => {
+			showExpenseActions(item);
+			longPressTimer = null;
+		}, 500);
+	}, { passive: true });
+
+	expensesList.addEventListener("touchend", () => {
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+		if (longPressItem) {
+			longPressItem.classList.remove("long-press-active");
+			longPressItem = null;
+		}
+	});
+
+	expensesList.addEventListener("touchmove", () => {
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+		if (longPressItem) {
+			longPressItem.classList.remove("long-press-active");
+			longPressItem = null;
+		}
+	});
+
+	// Desktop: right-click on expense
+	expensesList.addEventListener("contextmenu", (e) => {
+		const item = (e.target as HTMLElement).closest(".expense-item") as HTMLElement | null;
+		if (!item || !item.dataset.expenseId) return;
+		e.preventDefault();
+		showExpenseActions(item);
+	});
+
+	// --- Split details toggle ---
 	$("#expenses-list").addEventListener("click", (e) => {
-		const btn = (e.target as HTMLElement).closest("[data-remove-expense]") as HTMLElement | null;
-		if (btn) {
-			const id = btn.dataset.removeExpense!;
-			const expense = getState().expenses.find((ex) => ex.id === id);
-			if (!expense) return;
-			showDialog({
-				type: "confirm",
-				title: `Delete "${expense.desc}"? 🗑️`,
-				onConfirm: () => {
-					deleteExpense(getState(), id);
-					rerender();
-				},
-			});
+		const badge = (e.target as HTMLElement).closest("[data-split-toggle]") as HTMLElement | null;
+		if (!badge) return;
+		const item = badge.closest(".expense-item");
+		if (!item) return;
+		const details = item.querySelector(".split-details") as HTMLElement | null;
+		if (details) {
+			details.hidden = !details.hidden;
+			badge.classList.toggle("split-badge-active", !details.hidden);
 		}
 	});
 
@@ -282,23 +625,39 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 	$("#settlement").addEventListener("click", (e) => {
 		const settleBtn = (e.target as HTMLElement).closest("[data-settle-from]") as HTMLElement | null;
 		if (!settleBtn) return;
+		e.stopPropagation();
 		const from = settleBtn.dataset.settleFrom!;
 		const to = settleBtn.dataset.settleTo!;
 		const currency = settleBtn.dataset.settleCurrency!;
 		const amount = parseFloat(settleBtn.dataset.settleAmount!);
 		const pm = getPayment(getState(), to);
+		const sym = getSymbol(currency);
+
 		showDialog({
-			type: "confirm",
-			title: `Mark ${from} → ${to} (${getSymbol(currency)}${amount.toFixed(2)}) as settled?${pm ? `\n💳 Pay via: ${pm}` : ""}`,
-			onConfirm: () => {
+			type: "prompt",
+			title: `${from} → ${to}${pm ? `\n💳 Pay via: ${pm}` : ""}\nHow much to settle?`,
+			defaultValue: amount.toFixed(2),
+			onConfirm: (val) => {
+				const settleAmount = parseFloat(val || "0");
+				if (!settleAmount || settleAmount <= 0) {
+					showDialog({ type: "error", title: "Enter a valid amount lah 🫠" });
+					return;
+				}
+				if (settleAmount > amount + 0.01) {
+					showDialog({ type: "error", title: `Cannot settle more than owed (${sym}${amount.toFixed(2)}) 🧮` });
+					return;
+				}
 				addExpense(getState(), {
+					type: "settlement",
 					desc: `💸 Settlement: ${from} → ${to}`,
-					amount,
+					amount: Math.round(settleAmount * 100) / 100,
 					paidBy: from,
 					splitAmong: [to],
 					currency,
 				});
 				rerender();
+				const isPartial = settleAmount < amount - 0.01;
+				showToast(isPartial ? `⏳ Partial: ${sym}${settleAmount.toFixed(2)} of ${sym}${amount.toFixed(2)}` : `✅ ${from} settled with ${to}!`);
 			},
 		});
 	});

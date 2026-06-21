@@ -9,14 +9,23 @@ export interface Member {
 	avatar: string;
 }
 
+export type SplitType = 'equal' | 'exact' | 'percent';
+export type ExpenseType = 'expense' | 'settlement';
+
 export interface Expense {
 	id: string;
+	type: ExpenseType;
 	desc: string;
 	amount: number;
 	paidBy: string;
 	splitAmong: string[];
+	splitType: SplitType;
+	splitValues?: Record<string, number>;
 	currency: string;
+	category?: string;
+	date: number;
 	createdAt: number;
+	updatedAt: number;
 	deleted: boolean;
 }
 

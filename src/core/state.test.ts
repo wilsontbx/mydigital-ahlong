@@ -24,12 +24,16 @@ function makeMember(name: string, payment = "", avatar = "😀"): Member {
 function makeExpense(overrides: Partial<Expense> = {}): Expense {
 	return {
 		id: "e1",
+		type: "expense",
 		desc: "Test",
 		amount: 10,
 		paidBy: "Alice",
 		splitAmong: ["Alice", "Bob"],
+		splitType: "equal",
 		currency: "MYR",
+		date: 1000,
 		createdAt: 1000,
+		updatedAt: 1000,
 		deleted: false,
 		...overrides,
 	};

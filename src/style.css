@@ -572,6 +572,297 @@ select:focus {
 	flex: 1;
 }
 
+.expense-meta-row {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+.category-select {
+	flex: 1;
+	font-size: 0.85rem;
+}
+
+.expense-date-input {
+	flex: 1;
+	font-size: 0.85rem;
+	color: #374151;
+}
+
+.split-type-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.split-type-row .form-label-inline {
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: #78350f;
+	white-space: nowrap;
+}
+
+.split-type-select {
+	flex: 1;
+	font-size: 0.85rem;
+}
+
+.split-values {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.6rem 0.75rem;
+	background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+	border-radius: 10px;
+	border: 1px solid #e5e7eb;
+}
+
+.split-values[hidden] {
+	display: none;
+}
+
+.split-values:empty {
+	display: none;
+}
+
+.split-value-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.split-value-name {
+	flex: 1;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: #374151;
+}
+
+.split-value-input {
+	width: 80px;
+	padding: 0.4rem 0.5rem;
+	border-radius: 8px;
+	border: 1px solid #d1d5db;
+	font-size: 0.85rem;
+	text-align: right;
+}
+
+.split-value-input:focus {
+	border-color: #40916c;
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(64, 145, 108, 0.15);
+}
+
+.split-value-prefix {
+	font-size: 0.82rem;
+	color: #374151;
+	font-weight: 600;
+}
+
+.split-value-suffix {
+	font-size: 0.8rem;
+	color: #6b7280;
+	font-weight: 500;
+}
+
+.split-value-calc {
+	font-size: 0.75rem;
+	color: #6b7280;
+	margin-left: 0.25rem;
+	white-space: nowrap;
+}
+
+.split-value-total {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding-top: 0.4rem;
+	margin-top: 0.3rem;
+	border-top: 1px solid #e5e7eb;
+}
+
+.split-value-total-label {
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: #374151;
+}
+
+.split-value-total-amount {
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: #6b7280;
+}
+
+.split-value-total-amount.split-total-valid {
+	color: #059669;
+}
+
+.split-value-total-amount.split-total-invalid {
+	color: #dc2626;
+}
+
+.split-type-badge {
+	font-size: 0.65rem;
+	padding: 0.15rem 0.4rem;
+	border-radius: 4px;
+	background: linear-gradient(135deg, #fbbf24, #f59e0b);
+	color: #78350f;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	cursor: pointer;
+	position: relative;
+}
+
+.split-type-badge.split-type-equal {
+	background: #e5e7eb;
+	color: #4b5563;
+}
+
+.split-type-badge.split-badge-active {
+	outline: 2px solid #40916c;
+	outline-offset: 1px;
+}
+
+.split-details {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+	margin-top: 0.4rem;
+	padding: 0.5rem 0.6rem;
+	background: #f3f4f6;
+	border-radius: 8px;
+	animation: splitExpand 0.15s ease-out;
+}
+
+.split-details[hidden] {
+	display: none;
+}
+
+.split-detail-item {
+	font-size: 0.78rem;
+	color: #374151;
+	padding: 0.2rem 0.5rem;
+	background: #fff;
+	border-radius: 6px;
+	border: 1px solid #e5e7eb;
+}
+
+.split-detail-item b {
+	color: #1b4332;
+}
+
+@keyframes splitExpand {
+	from { opacity: 0; transform: translateY(-4px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+.expense-category-badge {
+	font-size: 0.75rem;
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+	background: #ecfdf5;
+	color: #065f46;
+	font-weight: 500;
+}
+
+.expense-filters {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-bottom: 0.75rem;
+	padding: 0.6rem;
+	background: #f9fafb;
+	border-radius: 10px;
+	border: 1px solid #e5e7eb;
+}
+
+.filter-row {
+	display: flex;
+	gap: 0.4rem;
+	align-items: center;
+}
+
+.filter-select {
+	flex: 1;
+	font-size: 0.82rem;
+	padding: 0.4rem 0.5rem;
+	border-radius: 8px;
+	border: 1px solid #d1d5db;
+	background: #fff;
+}
+
+.filter-sort-btn {
+	flex-shrink: 0;
+	font-size: 0.78rem;
+	padding: 0.4rem 0.6rem;
+	border-radius: 8px;
+	border: 1px solid #d1d5db;
+	background: #fff;
+	cursor: pointer;
+	font-weight: 600;
+	white-space: nowrap;
+	transition: all 0.15s;
+}
+
+.filter-sort-btn:hover {
+	border-color: #40916c;
+	background: #ecfdf5;
+}
+
+.filter-date-group {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+}
+
+.filter-date-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: #6b7280;
+	white-space: nowrap;
+}
+
+.filter-date {
+	flex: 1;
+	font-size: 0.8rem;
+	padding: 0.35rem 0.4rem;
+	border-radius: 8px;
+	border: 1px solid #d1d5db;
+	background: #fff;
+	min-width: 0;
+}
+
+.category-breakdown {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-bottom: 0.75rem;
+}
+
+.category-breakdown:empty {
+	display: none;
+}
+
+.cat-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	font-size: 0.75rem;
+	padding: 0.25rem 0.5rem;
+	border-radius: 20px;
+	background: #f3f4f6;
+	border: 1px solid #e5e7eb;
+	font-weight: 500;
+	color: #374151;
+}
+
+.cat-pill-amount {
+	font-weight: 700;
+	color: #1b4332;
+}
+
 .split-checkboxes {
 	display: flex;
 	flex-wrap: wrap;
@@ -666,66 +957,160 @@ select:focus {
 /* Expenses */
 .expense-item {
 	position: relative;
-	padding: 0.7rem 0;
-	border-bottom: 1px solid #f0f0f0;
-	transition: background 0.15s;
+	padding: 0.65rem 0.75rem;
+	margin-bottom: 0.5rem;
+	background: #f9fafb;
+	border-radius: 10px;
+	border: 1px solid #e5e7eb;
+	transition: all 0.15s;
 }
 
 .expense-item:hover {
-	background: #f8fffe;
+	border-color: #40916c;
+	box-shadow: 0 2px 8px rgba(64, 145, 108, 0.1);
+}
+
+.expense-item.long-press-active {
+	border-color: #f59e0b;
+	background: #fffbeb;
+	transform: scale(0.98);
+	transition: all 0.2s;
+}
+
+.expense-form.editing {
+	border: 2px solid #f59e0b;
+	border-radius: 12px;
+	padding: 0.75rem;
+	background: #fffbeb;
+}
+
+.btn-cancel-edit {
+	background: #e5e7eb;
+	color: #374151;
+	margin-top: 0.3rem;
+	padding: 0.7rem 1rem;
+	font-size: 0.95rem;
+	font-weight: 600;
+	border-radius: 10px;
+}
+
+.btn-cancel-edit:hover {
+	background: #d1d5db;
 }
 
 .expense-item:last-child {
-	border-bottom: none;
+	margin-bottom: 0;
 }
 
 .expense-info {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+	gap: 0.5rem;
+}
+
+.expense-info strong {
+	font-size: 0.9rem;
+	color: #1f2937;
 }
 
 .expense-amount {
 	font-weight: 700;
 	color: #d97706;
-	font-size: 1.05rem;
+	font-size: 1rem;
+	white-space: nowrap;
 }
 
 .expense-meta {
-	font-size: 0.8rem;
-	color: #777;
-	margin-top: 0.2rem;
+	font-size: 0.78rem;
+	color: #6b7280;
+	margin-top: 0.3rem;
+	line-height: 1.4;
+}
+
+.expense-meta b {
+	color: #374151;
 }
 
 .expense-date {
-	margin-left: 0.5rem;
-	color: #aaa;
+	display: inline-block;
+	margin-left: 0.4rem;
+	color: #9ca3af;
+	font-size: 0.72rem;
 }
 
 .btn-expense-delete {
 	display: inline-block;
 	margin-top: 0.4rem;
 	background: none;
-	border: 1px solid #ffcdd2;
-	color: #c62828;
+	border: 1px solid #fecaca;
+	color: #dc2626;
 	font-size: 0.72rem;
-	font-weight: 500;
-	padding: 0.2rem 0.6rem;
-	border-radius: 4px;
+	font-weight: 600;
+	padding: 0.25rem 0.6rem;
+	border-radius: 6px;
 	cursor: pointer;
 	transition: all 0.15s;
 }
 
 .btn-expense-delete:hover {
-	background: #ffebee;
-	border-color: #e53935;
+	background: #fef2f2;
+	border-color: #f87171;
+	box-shadow: 0 1px 4px rgba(220, 38, 38, 0.1);
 }
 
 .expense-locked {
 	display: inline-block;
 	margin-top: 0.4rem;
 	font-size: 0.7rem;
-	color: #999;
+	color: #9ca3af;
+	font-style: italic;
+}
+
+.expense-settle-status {
+	margin-top: 0.4rem;
+}
+
+.settle-bar {
+	height: 4px;
+	background: #e5e7eb;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.settle-bar-fill {
+	height: 100%;
+	border-radius: 4px;
+	transition: width 0.3s ease;
+}
+
+.settle-pending .settle-bar-fill {
+	background: #d1d5db;
+	width: 0%;
+}
+
+.settle-partial .settle-bar-fill {
+	background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+
+.settle-full .settle-bar-fill {
+	background: linear-gradient(90deg, #34d399, #059669);
+}
+
+.settle-label {
+	font-size: 0.72rem;
+	color: #6b7280;
+	margin-top: 0.2rem;
+	display: block;
+}
+
+.settle-partial .settle-label {
+	color: #92400e;
+}
+
+.settle-full .settle-label {
+	color: #059669;
+	font-weight: 600;
 }
 
 .btn-delete {
@@ -902,6 +1287,12 @@ select:focus {
 
 .txn-deleted .txn-desc {
 	text-decoration: line-through;
+}
+
+.txn-edited {
+	opacity: 0.7;
+	border-left: 2px solid #f59e0b;
+	padding-left: 0.5rem;
 }
 
 /* Settled celebration */

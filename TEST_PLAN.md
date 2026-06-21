@@ -91,7 +91,7 @@
 
 | Step | Action                                                                                                                 | Expected Result                                                                                                                                                                                        |
 | ---- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1    | Fill: Description="Lunch", Currency="RM MYR", Amount=30.00, Paid by="Alice", all members checked → click "Add Expense" | Expense appears in the Expenses section showing "Lunch RM30.00 Paid by Alice · Split: Alice, Bob". Toast: "🧧 Added: Lunch (RM30.00)". Description and amount inputs clear. Settlement section updates |
+| 1    | Fill: Description="Lunch", Currency="RM MYR", Amount=30.00, Paid by="Alice", all members checked → click "Add Expense" | Expense appears in the Expenses section showing "🍔 Lunch RM30.00 Paid by Alice · equal badge". Toast: "🧧 Added: Lunch (RM30.00)". Inputs clear, date resets to today. Settlement section updates |
 | 2    | Uncheck "Bob" in split checkboxes, fill remaining fields and submit                                                    | Expense is split only among checked members                                                                                                                                                            |
 | 3    | Change currency to "S$ SGD", amount=50, submit                                                                         | Expense shows as S$50.00. Settlement groups expenses by currency                                                                                                                                       |
 | 4    | Leave description empty and click "Add Expense"                                                                        | Error dialog: "Fill in all fields lah 🫠"                                                                                                                                                              |
@@ -99,15 +99,61 @@
 | 6    | Leave "Paid by" unselected and click "Add Expense"                                                                     | Error dialog: "Fill in all fields lah 🫠"                                                                                                                                                              |
 | 7    | Uncheck all split checkboxes and click "Add Expense"                                                                   | Error dialog: "Fill in all fields lah 🫠"                                                                                                                                                              |
 
+### 3.1a Split Types
+
+| Step | Action                                                                                     | Expected Result                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| 1    | Select "Exact amounts" from split type dropdown                                            | Per-member amount inputs appear with currency prefix and a total row                                              |
+| 2    | Enter amounts that don't sum to the total, click "Add Expense"                             | Error dialog: "Exact amounts must add up to X (currently Y) 🧮"                                                   |
+| 3    | Enter amounts that sum to total, submit                                                    | Expense added with splitType="exact" and splitValues stored. Badge shows "exact"                                  |
+| 4    | Select "By percentage" from split type dropdown                                            | Per-member % inputs appear with suffix and calculated amount (= RM...). Total row shows X% / 100%                |
+| 5    | Enter percentages not summing to 100, click "Add Expense"                                  | Error dialog: "Percentages must add up to 100% (currently X%) 🧮"                                                 |
+| 6    | Enter valid percentages, submit                                                            | Expense added with splitType="percent". Badge shows "percent"                                                     |
+| 7    | In exact/percent mode, uncheck a member                                                    | That member's input removed, other members' values preserved                                                      |
+| 8    | Click "all" toggle in exact/percent mode                                                   | All members checked, inputs rebuilt with preserved values                                                         |
+
+### 3.1b Category & Date
+
+| Step | Action                                                          | Expected Result                                                                      |
+| ---- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1    | Type "lunch" in description                                     | Category auto-selects "🍔 Food"                                                      |
+| 2    | Type "grab" in description                                      | Category auto-selects "🚗 Transport"                                                  |
+| 3    | Manually select a category before typing                        | Auto-suggest does not override manual selection                                       |
+| 4    | Date picker defaults                                            | Shows today's date, cannot select future dates                                        |
+| 5    | Change date to yesterday and submit                             | Expense shows "Yesterday" in the date display                                         |
+| 6    | Submit expense                                                  | Category resets to "no category", date resets to today                                |
+
+### 3.1c Filters & Sort
+
+| Step | Action                                              | Expected Result                                                        |
+| ---- | --------------------------------------------------- | ---------------------------------------------------------------------- |
+| 1    | Select "🍔 Food" from filter category dropdown       | Only food-category expenses shown. Category breakdown updates           |
+| 2    | Select "🏷️ Uncategorized" from filter                | Only expenses without a category shown                                  |
+| 3    | Set "From" date filter                              | Only expenses on or after that date shown                               |
+| 4    | Set "To" date filter                                | Only expenses on or before that date shown                              |
+| 5    | Filter dates cannot be set to future                | Max date is today on both From and To inputs                            |
+| 6    | Click "🔽 Newest" sort button                        | Toggles to "🔼 Oldest", expenses sorted oldest first                   |
+| 7    | Click "🔼 Oldest" sort button                        | Toggles back to "🔽 Newest", expenses sorted newest first              |
+| 8    | Two expenses on same date                           | Sorted by creation time (most recently added first in desc mode)        |
+
+### 3.1d Settlement Status on Expenses
+
+| Step | Action                                                   | Expected Result                                                                               |
+| ---- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 1    | Expense with no settlements                              | Shows "💤 RM15.00 owed" with empty progress bar and unpaid members listed                     |
+| 2    | Settle one member's debt partially (via settlement)      | Shows "⏳ RM7.50 / RM15.00" with amber progress bar, unpaid members listed                    |
+| 3    | All debts for an expense fully settled                   | Shows "✅ Settled" with full green progress bar                                                |
+| 4    | Click the split badge on an expense                      | Expands to show per-person amounts with ✅ or "(paid RM...)" indicators                       |
+| 5    | Click the split badge again                              | Collapses the detail view                                                                     |
+
 ### 3.2 Delete Expense
 
 | Step | Action                                                             | Expected Result                                                                                                                        |
 | ---- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | "I am" is set to "Alice". Click "Delete" on an expense Alice added | Confirm dialog: `Delete "Lunch"? 🗑️`                                                                                                   |
+| 1    | Click "Delete" on an expense                                       | Confirm dialog: `Delete "Lunch"? 🗑️`                                                                                                   |
 | 2    | Click "do it 🫡"                                                   | Expense disappears from the Expenses list. Transaction log shows "❌ Deleted: Lunch" with the original amount. Settlement recalculates |
 | 3    | Click "nah fam 🙅"                                                 | Dialog closes, expense remains                                                                                                         |
-| 4    | "I am" is set to "Bob". Look at expense added by Alice             | No "Delete" button is shown for that expense                                                                                           |
-| 5    | Expense is after a settlement in the same currency                 | Expense shows 🔒 settled icon, no delete button                                                                                        |
+| 4    | Expense is before a settlement in the same currency                | No delete button shown (expense is locked)                                                                                             |
 
 ### 3.3 Empty State
 
@@ -264,6 +310,8 @@
 | 1 | Group has 3+ members. Click "all" toggle button | All split checkboxes become checked |
 | 2 | Click "none" toggle button | All split checkboxes become unchecked |
 | 3 | Group has 2 or fewer members | Toggle buttons are not shown |
+| 4 | In exact/percent mode, click "all" | All members checked, split value inputs rebuilt with existing values preserved |
+| 5 | In exact/percent mode, click "none" | All unchecked, split values panel hidden |
 
 ---
 

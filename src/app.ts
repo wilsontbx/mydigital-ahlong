@@ -183,14 +183,19 @@ async function migrate() {
 				const amount = e.amount as number || 0;
 				const originalAmount = e.originalAmount as number | undefined;
 				const isDeleted = amount === 0 && !!originalAmount;
+				const createdAt = e.createdAt as number || Date.parse(`${e.date}T${e.time || "00:00"}`) || Date.now();
 				return {
 					id: (e.id as string) || Date.now().toString(36),
+					type: "expense" as const,
 					desc: ((e.desc as string) || "").replace(/^❌ Deleted: /, ""),
 					amount: isDeleted ? (originalAmount || 0) : amount,
 					paidBy: (e.paidBy as string) || "",
 					splitAmong: (e.splitAmong as string[]) || [],
+					splitType: "equal" as const,
 					currency: (e.currency as string) || "MYR",
-					createdAt: e.createdAt as number || Date.parse(`${e.date}T${e.time || "00:00"}`) || Date.now(),
+					date: createdAt,
+					createdAt,
+					updatedAt: createdAt,
 					deleted: isDeleted,
 				};
 			});

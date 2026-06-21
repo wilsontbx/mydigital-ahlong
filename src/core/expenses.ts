@@ -1,4 +1,4 @@
-import type { Expense, GroupState, Debt, Member } from "./types";
+import type { Expense, ExpenseType, GroupState, Debt, Member, SplitType } from "./types";
 
 let _id = Date.now();
 function genId(): string {
@@ -6,25 +6,54 @@ function genId(): string {
 }
 
 interface AddExpenseParams {
+	type?: ExpenseType;
 	desc: string;
 	amount: number;
 	paidBy: string;
 	splitAmong: string[];
+	splitType?: SplitType;
+	splitValues?: Record<string, number>;
 	currency: string;
+	category?: string;
+	date?: number;
 }
 
 export function addExpense(state: GroupState, params: AddExpenseParams): GroupState {
+	const now = Date.now();
+	const splitAmong = params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.name);
 	const expense: Expense = {
 		id: genId(),
+		type: params.type || "expense",
 		desc: params.desc,
 		amount: Math.round(params.amount * 100) / 100,
 		paidBy: params.paidBy,
-		splitAmong: params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.name),
+		splitAmong,
+		splitType: params.splitType || "equal",
+		splitValues: params.splitValues,
 		currency: params.currency,
-		createdAt: Date.now(),
+		category: params.category,
+		date: params.date || now,
+		createdAt: now,
+		updatedAt: now,
 		deleted: false,
 	};
 	state.expenses.push(expense);
+	return state;
+}
+
+export function editExpense(state: GroupState, id: string, params: Partial<AddExpenseParams>): GroupState {
+	const expense = state.expenses.find((e) => e.id === id);
+	if (!expense) return state;
+	if (params.desc !== undefined) expense.desc = params.desc;
+	if (params.amount !== undefined) expense.amount = Math.round(params.amount * 100) / 100;
+	if (params.paidBy !== undefined) expense.paidBy = params.paidBy;
+	if (params.splitAmong !== undefined) expense.splitAmong = params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.name);
+	if (params.splitType !== undefined) expense.splitType = params.splitType;
+	if (params.splitValues !== undefined) expense.splitValues = params.splitValues;
+	if (params.currency !== undefined) expense.currency = params.currency;
+	if (params.category !== undefined) expense.category = params.category;
+	if (params.date !== undefined) expense.date = params.date;
+	expense.updatedAt = Date.now();
 	return state;
 }
 
@@ -72,10 +101,23 @@ export function calcBalances(expenses: Expense[], members: Member[]): Record<str
 
 	for (const exp of expenses) {
 		if (exp.deleted) continue;
-		const share = exp.amount / exp.splitAmong.length;
 		balances[exp.paidBy] = (balances[exp.paidBy] || 0) + exp.amount;
-		for (const m of exp.splitAmong) {
-			balances[m] = (balances[m] || 0) - share;
+
+		const splitType = exp.splitType || "equal";
+		if (splitType === "exact" && exp.splitValues) {
+			for (const m of exp.splitAmong) {
+				balances[m] = (balances[m] || 0) - (exp.splitValues[m] || 0);
+			}
+		} else if (splitType === "percent" && exp.splitValues) {
+			for (const m of exp.splitAmong) {
+				const pct = exp.splitValues[m] || 0;
+				balances[m] = (balances[m] || 0) - (exp.amount * pct) / 100;
+			}
+		} else {
+			const share = exp.amount / exp.splitAmong.length;
+			for (const m of exp.splitAmong) {
+				balances[m] = (balances[m] || 0) - share;
+			}
 		}
 	}
 

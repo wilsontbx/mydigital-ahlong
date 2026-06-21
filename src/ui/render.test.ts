@@ -28,6 +28,12 @@ function setupDom() {
 		<div id="split-checkboxes"></div>
 		<select id="paid-by"></select>
 		<select id="expense-currency"></select>
+		<input id="expense-date" type="date" />
+		<select id="filter-category"><option value="">All</option></select>
+		<button id="filter-sort" data-sort="desc">🔽 Newest</button>
+		<input id="filter-date-from" type="date" />
+		<input id="filter-date-to" type="date" />
+		<div id="category-breakdown"></div>
 		<div id="expenses-list"></div>
 		<div id="settlement"></div>
 		<div id="txn-log"></div>
@@ -43,12 +49,16 @@ function makeMember(name: string, payment = "", avatar = "😀"): Member {
 function makeExpense(overrides: Partial<Expense> = {}): Expense {
 	return {
 		id: "e1",
+		type: "expense",
 		desc: "Lunch",
 		amount: 30,
 		paidBy: "Alice",
 		splitAmong: ["Alice", "Bob"],
+		splitType: "equal",
 		currency: "MYR",
+		date: 1000,
 		createdAt: 1000,
+		updatedAt: 1000,
 		deleted: false,
 		...overrides,
 	};

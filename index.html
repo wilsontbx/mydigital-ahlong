@@ -92,12 +92,33 @@
 							<select id="expense-currency" class="currency-select"></select>
 							<input id="expense-amount" type="number" step="0.01" min="0.01" placeholder="how much?" required />
 						</div>
+						<div class="expense-meta-row">
+							<select id="expense-category" class="category-select">
+								<option value="">no category</option>
+								<option value="food">🍔 Food</option>
+								<option value="transport">🚗 Transport</option>
+								<option value="accommodation">🏨 Accommodation</option>
+								<option value="shopping">🛍️ Shopping</option>
+								<option value="entertainment">🎬 Entertainment</option>
+								<option value="utilities">💡 Utilities</option>
+								<option value="other">📦 Other</option>
+							</select>
+							<input id="expense-date" type="date" class="expense-date-input" max="" />
+						</div>
 						<label for="paid-by" class="form-label">🫰 Who paid?</label>
 						<select id="paid-by" required>
 							<option value="" disabled selected>select who paid</option>
 						</select>
-						<label class="form-label">✂️ Split among</label>
+						<div class="split-type-row">
+							<span class="form-label-inline">✂️ Split</span>
+							<select id="split-type" class="split-type-select">
+								<option value="equal">Equal</option>
+								<option value="exact">Exact amounts</option>
+								<option value="percent">By percentage</option>
+							</select>
+						</div>
 						<div id="split-checkboxes" class="split-checkboxes"></div>
+						<div id="split-values" class="split-values" hidden></div>
 						<button type="submit" class="btn">💸 Add Expense</button>
 					</form>
 				</section>
@@ -106,6 +127,33 @@
 				<section class="card">
 					<h3>💰 Expenses</h3>
 					<p class="section-meme">the receipts don't lie bestie</p>
+					<div class="expense-filters">
+						<div class="filter-row">
+							<select id="filter-category" class="filter-select">
+								<option value="">All categories</option>
+								<option value="food">🍔 Food</option>
+								<option value="transport">🚗 Transport</option>
+								<option value="accommodation">🏨 Accommodation</option>
+								<option value="shopping">🛍️ Shopping</option>
+								<option value="entertainment">🎬 Entertainment</option>
+								<option value="utilities">💡 Utilities</option>
+								<option value="other">📦 Other</option>
+								<option value="uncategorized">🏷️ Uncategorized</option>
+							</select>
+							<button id="filter-sort" class="filter-sort-btn" type="button" title="Sort order">🔽 Newest</button>
+						</div>
+						<div class="filter-row">
+							<div class="filter-date-group">
+								<label class="filter-date-label">From</label>
+								<input id="filter-date-from" type="date" class="filter-date" max="" />
+							</div>
+							<div class="filter-date-group">
+								<label class="filter-date-label">To</label>
+								<input id="filter-date-to" type="date" class="filter-date" max="" />
+							</div>
+						</div>
+					</div>
+					<div id="category-breakdown" class="category-breakdown"></div>
 					<div id="expenses-list"></div>
 				</section>
 

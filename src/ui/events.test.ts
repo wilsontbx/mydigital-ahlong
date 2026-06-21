@@ -40,6 +40,7 @@ vi.mock("../core/expenses", () => ({
 	addMember: vi.fn(),
 	removeMember: vi.fn(),
 	addExpense: vi.fn(),
+	editExpense: vi.fn(),
 	deleteExpense: vi.fn(),
 	renameMember: vi.fn(),
 }));
@@ -69,7 +70,7 @@ vi.mock("../core/firebase", () => ({
 }));
 
 import { showDialog, showMemberMenu } from "./dialogs";
-import { addMember, addExpense, deleteExpense } from "../core/expenses";
+import { addMember, addExpense } from "../core/expenses";
 import { showToast } from "../shared/utils";
 import { render, setCurrencyOrder } from "./render";
 import { setActiveGroupId, addMyGroupId, cacheGroup, removeMyGroupId, removeCachedGroup } from "../core/state";
@@ -87,11 +88,20 @@ function setupDom() {
 		<form id="add-expense-form">
 			<input id="expense-desc" />
 			<input id="expense-amount" />
+			<select id="expense-category"><option value="">no category</option></select>
+			<input id="expense-date" type="date" />
 			<select id="paid-by"><option value="Alice">Alice</option></select>
 			<select id="expense-currency"><option value="MYR">MYR</option></select>
+			<select id="split-type"><option value="equal">Equal</option><option value="exact">Exact</option><option value="percent">Percent</option></select>
 			<div id="split-checkboxes"><input type="checkbox" value="Alice" checked /></div>
+			<div id="split-values" hidden></div>
 		</form>
-		<div id="expenses-list"><button data-remove-expense="e1">Delete</button></div>
+		<select id="filter-category"><option value="">All</option></select>
+		<button id="filter-sort" data-sort="desc">🔽 Newest</button>
+		<input id="filter-date-from" type="date" />
+		<input id="filter-date-to" type="date" />
+		<div id="category-breakdown"></div>
+		<div id="expenses-list"><div class="expense-item" data-expense-id="e1">Lunch</div></div>
 		<button id="share-btn"></button>
 		<button id="share-whatsapp"></button>
 		<button id="share-telegram"></button>
@@ -112,12 +122,16 @@ function makeState(): GroupState {
 		expenses: [
 			{
 				id: "e1",
+				type: "expense",
 				desc: "Lunch",
 				amount: 30,
 				paidBy: "Alice",
 				splitAmong: ["Alice", "Bob"],
+				splitType: "equal",
 				currency: "MYR",
+				date: 1000,
 				createdAt: 1000,
+				updatedAt: 1000,
 				deleted: false,
 			},
 		],
@@ -218,14 +232,12 @@ describe("setupEvents", () => {
 		expect((showDialog as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0].type).toBe("error");
 	});
 
-	it("opens delete confirm dialog from expenses list", () => {
+	it("opens action menu on expense contextmenu", () => {
 		const state = makeState();
 		setupEvents(() => state, () => {});
-		(document.querySelector("[data-remove-expense]") as HTMLButtonElement).click();
+		const item = document.querySelector("[data-expense-id]") as HTMLElement;
+		item.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
 		expect(showDialog).toHaveBeenCalled();
-		const cfg = (showDialog as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
-		cfg.onConfirm();
-		expect(deleteExpense).toHaveBeenCalledWith(state, "e1");
 	});
 
 	it("handles share link click", async () => {
