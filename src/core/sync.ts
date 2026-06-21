@@ -6,6 +6,39 @@ import { showToast } from "../shared/utils";
 let onRemoteState: ((s: GroupState) => void) | null = null;
 let localUpdatedAt = 0;
 
+// --- Merge: combine records from two copies of the same group ---
+
+function mergeGroups(local: GroupState, remote: GroupState): GroupState {
+	const localExpenseIds = new Set(local.expenses.map((e) => e.id));
+	const remoteExpenseIds = new Set(remote.expenses.map((e) => e.id));
+
+	// Start with local expenses, update any that exist in both (remote wins for shared IDs)
+	const merged = local.expenses.map((e) => {
+		if (remoteExpenseIds.has(e.id)) {
+			return remote.expenses.find((r) => r.id === e.id)!;
+		}
+		return e;
+	});
+
+	// Add expenses only in remote
+	for (const e of remote.expenses) {
+		if (!localExpenseIds.has(e.id)) {
+			merged.push(e);
+		}
+	}
+
+	// Merge members (union of both)
+	const memberSet = new Set([...local.members, ...remote.members]);
+
+	return {
+		id: local.id,
+		name: remote.updatedAt >= (local.updatedAt || 0) ? remote.name : local.name,
+		members: [...memberSet],
+		expenses: merged,
+		updatedAt: Math.max(remote.updatedAt || 0, local.updatedAt || 0),
+	};
+}
+
 export function initSync(setter: (s: GroupState) => void): void {
 	onRemoteState = setter;
 }
@@ -56,15 +89,13 @@ export function importGroup(imported: GroupState): GroupState {
 
 	if (idIdx !== -1) {
 		const existing = groups[idIdx];
-		if (imported.updatedAt >= (existing.updatedAt || 0)) {
-			groups[idIdx] = imported;
-			saveGroups(groups);
-			setActiveIndex(idIdx);
-			showToast(`Updated "${imported.name}" — synced latest data 🔄`);
-		} else {
-			setActiveIndex(idIdx);
-			return existing;
-		}
+		const merged = mergeGroups(existing, imported);
+		groups[idIdx] = merged;
+		saveGroups(groups);
+		setActiveIndex(idIdx);
+		showToast(`Updated "${merged.name}" — synced & merged data 🔄`);
+		localUpdatedAt = merged.updatedAt;
+		return merged;
 	} else {
 		groups.push(imported);
 		saveGroups(groups);
@@ -84,14 +115,14 @@ function handleRemoteUpdate(updated: GroupState): void {
 	// Echo suppression: ignore if remote is not newer
 	if (updated.updatedAt <= localUpdatedAt) return;
 
-	localUpdatedAt = updated.updatedAt;
-
 	const groups = loadGroups();
 	const idx = getActiveIndex();
 	if (groups[idx]?.id === updated.id) {
-		groups[idx] = updated;
+		const merged = mergeGroups(groups[idx], updated);
+		localUpdatedAt = merged.updatedAt;
+		groups[idx] = merged;
 		saveGroups(groups);
-		if (onRemoteState) onRemoteState(updated);
+		if (onRemoteState) onRemoteState(merged);
 	}
 }
 

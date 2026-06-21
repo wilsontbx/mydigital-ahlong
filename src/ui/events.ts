@@ -13,6 +13,7 @@ import {
 	loadAvatars,
 	saveAvatars,
 	decodeState,
+	encodeState,
 } from "../core/state";
 import { addMember, removeMember, addExpense, renameMember } from "../core/expenses";
 import { showDialog, showMemberMenu, showPayUpModal, showSettledModal } from "./dialogs";
@@ -23,10 +24,10 @@ import { commit, importGroup } from "../core/sync";
 
 function getShareUrl(state: import("../core/types").GroupState): string {
 	if (isFirebaseEnabled()) {
-		// Short link: just the group ID — receiver fetches from Firebase
 		return `${window.location.origin}${window.location.pathname}?group=${state.id}`;
 	}
-	return window.location.href;
+	const encoded = encodeState(state);
+	return `${window.location.origin}${window.location.pathname}#${encoded}`;
 }
 
 export function setupEvents(getState: () => GroupState, setState: (s: GroupState) => void): void {
