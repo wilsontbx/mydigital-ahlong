@@ -287,7 +287,26 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 
 	$("#share-facebook").addEventListener("click", () => {
 		const url = getShareUrl(getState());
-		window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, "_blank");
+		const quote = `Check out our expenses on MyDigitalAhLong 🤜💰`;
+		window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(quote)}`, "_blank");
+	});
+
+	$("#share-messenger").addEventListener("click", async () => {
+		const url = getShareUrl(getState());
+		if (navigator.share) {
+			try {
+				await navigator.share({
+					title: "MyDigitalAhLong 🤜💰",
+					text: "Check out our expenses on MyDigitalAhLong",
+					url,
+				});
+				return;
+			} catch (e) {
+				if ((e as DOMException).name === "AbortError") return;
+			}
+		}
+		const text = `Check out our expenses on MyDigitalAhLong 🤜💰\n${url}`;
+		window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`, "_blank");
 	});
 
 	// --- Settlement actions ---

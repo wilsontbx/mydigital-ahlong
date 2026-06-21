@@ -109,6 +109,7 @@ function setupDom() {
 		<button id="share-telegram"></button>
 		<button id="share-twitter"></button>
 		<button id="share-facebook"></button>
+		<button id="share-messenger"></button>
 		<div id="settlement"></div>
 		<button id="modal-close"></button>
 		<div id="meme-modal" hidden></div>

@@ -345,6 +345,10 @@ header h1 {
 	background: #1877f2;
 }
 
+.share-msg {
+	background: linear-gradient(135deg, #00b2ff, #006aff, #a033ff);
+}
+
 .card {
 	background: var(--card-bg);
 	backdrop-filter: blur(8px);
