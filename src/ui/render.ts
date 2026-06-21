@@ -1,6 +1,6 @@
 import type { GroupState } from "../core/types";
 import { $, esc } from "../shared/utils";
-import { CURRENCIES, loadGroups, getActiveIndex, loadPaymentMethods, loadAvatars } from "../core/state";
+import { CURRENCIES, getMyGroupIds, getCachedGroup, getActiveGroupId } from "../core/state";
 import { simplifyDebts } from "../core/expenses";
 
 // --- Helpers ---
@@ -11,9 +11,30 @@ function getSymbol(code: string): string {
 	return c ? c.symbol : code;
 }
 
-function getAvatar(name: string): string {
-	const avatars = loadAvatars();
-	return avatars[name] || "😀";
+function getAvatar(state: GroupState, name: string): string {
+	const member = state.members.find((m) => m.name === name);
+	return member?.avatar || "😀";
+}
+
+function getPayment(state: GroupState, name: string): string {
+	const member = state.members.find((m) => m.name === name);
+	return member?.payment || "";
+}
+
+function formatDate(ts: number): string {
+	if (!ts) return "";
+	const d = new Date(ts);
+	const now = new Date();
+	const isToday = d.toDateString() === now.toDateString();
+	const yesterday = new Date(now);
+	yesterday.setDate(yesterday.getDate() - 1);
+	const isYesterday = d.toDateString() === yesterday.toDateString();
+
+	const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+	if (isToday) return `Today ${time}`;
+	if (isYesterday) return `Yesterday ${time}`;
+	return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + ` ${time}`;
 }
 
 // --- Currency order (local) ---
@@ -39,51 +60,38 @@ export function getOrderedCurrencies() {
 	return order.map((code) => CURRENCIES.find((c) => c.code === code)).filter(Boolean) as typeof CURRENCIES;
 }
 
-// --- I am ---
-
-const IAM_KEY = "mydigital-ahlong_iam";
-
-export function getIam(): string {
-	return localStorage.getItem(IAM_KEY) || "";
-}
-
-export function setIam(name: string): void {
-	localStorage.setItem(IAM_KEY, name);
-}
 
 // --- Render functions ---
 
 export { getSymbol };
 
 export function renderGroupSwitcher(_state: GroupState): void {
-	const groups = loadGroups();
-	const activeIdx = getActiveIndex();
+	const groupIds = getMyGroupIds();
+	const activeId = getActiveGroupId();
 	const container = $("#group-tabs");
-	container.innerHTML =
-		groups.map((g, i) => `<button class="group-tab ${i === activeIdx ? "active" : ""}" data-group-idx="${i}">${esc(g.name)}</button>`).join("") +
-		`<button class="group-tab group-tab-new" id="new-group-btn">+</button>`;
+
+	const tabs = groupIds.map((id) => {
+		const cached = getCachedGroup(id);
+		const name = cached?.name || "...";
+		const isActive = id === activeId;
+		return `<button class="group-tab ${isActive ? "active" : ""}" data-group-id="${id}">${esc(name)}</button>`;
+	});
+
+	container.innerHTML = tabs.join("") + `<button class="group-tab group-tab-new" id="new-group-btn">+</button>`;
 }
 
 export function renderGroup(state: GroupState): void {
 	$("#group-name").textContent = state.name;
 }
 
-export function renderIam(state: GroupState): void {
-	const sel = $("#iam-select");
-	const current = getIam();
-	sel.innerHTML =
-		`<option value="" disabled ${!current ? "selected" : ""}>who dis?</option>` +
-		state.members.map((m) => `<option value="${esc(m)}" ${m === current ? "selected" : ""}>${esc(m)}</option>`).join("");
-}
 
 export function renderMembers(state: GroupState): void {
 	const list = $("#members-list");
-	const payments = loadPaymentMethods();
 	list.innerHTML = state.members
 		.map(
 			(m) => `
-    <span class="member-tag" data-member="${esc(m)}">
-      <span class="member-avatar">${getAvatar(m)}</span> ${esc(m)} ${payments[m] ? "💳" : ""}
+    <span class="member-tag" data-member="${esc(m.name)}">
+      <span class="member-avatar">${m.avatar}</span> ${esc(m.name)} ${m.payment ? "💳" : ""}
     </span>
   `,
 		)
@@ -100,17 +108,16 @@ export function renderExpenseForm(state: GroupState): void {
 			.map(
 				(m) => `
     <label class="split-label checked">
-      <input type="checkbox" value="${esc(m)}" checked>
-      <span class="split-avatar">${getAvatar(m)}</span>
-      <span class="split-name">${esc(m)}</span>
+      <input type="checkbox" value="${esc(m.name)}" checked>
+      <span class="split-avatar">${m.avatar}</span>
+      <span class="split-name">${esc(m.name)}</span>
     </label>
   `,
 			)
 			.join("");
 
 	const select = $("#paid-by");
-	const iam = getIam();
-	select.innerHTML = state.members.map((m) => `<option value="${esc(m)}" ${m === iam ? "selected" : ""}>${esc(m)}</option>`).join("");
+	select.innerHTML = state.members.map((m) => `<option value="${esc(m.name)}">${esc(m.name)}</option>`).join("");
 
 	const currSel = $("#expense-currency");
 	currSel.innerHTML = getOrderedCurrencies()
@@ -120,27 +127,26 @@ export function renderExpenseForm(state: GroupState): void {
 
 export function renderExpenses(state: GroupState): void {
 	const list = $("#expenses-list");
-	if (!state.expenses.length) {
+	const activeExpenses = state.expenses.filter((e) => !e.deleted);
+	if (!activeExpenses.length) {
 		list.innerHTML = '<p class="empty">🎶 nothing here yet... go spend some money</p>';
 		return;
 	}
-	const iam = getIam();
-
 	// Find which expenses are locked (came before a settlement of the same currency)
 	const lockedIds = new Set<string>();
 	const settledCurrencies = new Set<string>();
-	for (let i = state.expenses.length - 1; i >= 0; i--) {
-		const exp = state.expenses[i];
+	for (let i = activeExpenses.length - 1; i >= 0; i--) {
+		const exp = activeExpenses[i];
 		const cur = exp.currency || "MYR";
 		if (exp.desc.startsWith("💸 Settlement")) {
 			settledCurrencies.add(cur);
 		}
-		if (settledCurrencies.has(cur) && !exp.desc.startsWith("💸 Settlement") && !exp.desc.startsWith("❌ Deleted")) {
+		if (settledCurrencies.has(cur) && !exp.desc.startsWith("💸 Settlement")) {
 			lockedIds.add(exp.id);
 		}
 	}
 
-	const visible = state.expenses.filter((e) => !e.desc.startsWith("❌ Deleted") && !e.desc.startsWith("💸 Settlement"));
+	const visible = activeExpenses.filter((e) => !e.desc.startsWith("💸 Settlement"));
 	if (!visible.length) {
 		list.innerHTML = '<p class="empty">🎶 nothing here yet... go spend some money</p>';
 		return;
@@ -148,7 +154,7 @@ export function renderExpenses(state: GroupState): void {
 
 	list.innerHTML = visible
 		.map((e) => {
-			const canDelete = !lockedIds.has(e.id) && (e.addedBy === iam || !e.addedBy);
+			const canDelete = !lockedIds.has(e.id);
 			return `
     <div class="expense-item">
       <div class="expense-info">
@@ -156,8 +162,8 @@ export function renderExpenses(state: GroupState): void {
         <span class="expense-amount">${getSymbol(e.currency)}${e.amount.toFixed(2)}</span>
       </div>
       <div class="expense-meta">
-        Paid by ${getAvatar(e.paidBy)} <b>${esc(e.paidBy)}</b> · Split: ${e.splitAmong.map((s) => `${getAvatar(s)} ${esc(s)}`).join(", ")}
-        <span class="expense-date">${e.date}${e.time ? " " + e.time : ""}</span>
+        Paid by ${getAvatar(state, e.paidBy)} <b>${esc(e.paidBy)}</b> · Split: ${e.splitAmong.map((s) => `${getAvatar(state, s)} ${esc(s)}`).join(", ")}
+        <span class="expense-date">${formatDate(e.createdAt)}</span>
       </div>
       ${canDelete ? `<button class="btn-expense-delete" data-remove-expense="${e.id}">Delete</button>` : lockedIds.has(e.id) ? `<span class="expense-locked">🔒 settled</span>` : ""}
     </div>
@@ -168,13 +174,13 @@ export function renderExpenses(state: GroupState): void {
 
 export function renderSettlement(state: GroupState): void {
 	const container = $("#settlement");
-	if (!state.expenses.length) {
+	const activeExpenses = state.expenses.filter((e) => !e.deleted);
+	if (!activeExpenses.length) {
 		container.innerHTML = '<p class="empty">add some expenses first lah 🫠</p>';
 		return;
 	}
 
-	const activeExpenses = state.expenses.filter((e) => e.amount > 0 && e.splitAmong.length > 0);
-	const byCurrency: Record<string, typeof state.expenses> = {};
+	const byCurrency: Record<string, typeof activeExpenses> = {};
 	for (const e of activeExpenses) {
 		const cur = e.currency || "MYR";
 		if (!byCurrency[cur]) byCurrency[cur] = [];
@@ -190,12 +196,17 @@ export function renderSettlement(state: GroupState): void {
 		html += `<h4>${sym} ${currency}</h4>`;
 		html += debts
 			.map((d) => {
-				const pm = loadPaymentMethods()[d.to] || "";
+				const pm = getPayment(state, d.to);
 				return `
       <div class="debt-item" data-debt-from="${esc(d.from)}" data-debt-to="${esc(d.to)}" data-debt-amount="${sym}${d.amount.toFixed(2)}" data-debt-currency="${currency}" data-debt-raw="${d.amount.toFixed(2)}">
-        <span class="debt-text">${getAvatar(d.from)} <b>${esc(d.from)}</b> owes ${getAvatar(d.to)} <b>${esc(d.to)}</b></span>
-        <span class="debt-amount">${sym}${d.amount.toFixed(2)}</span>
-        ${pm ? `<span class="debt-payment">💳 ${esc(pm)}</span>` : ""}
+        <div class="debt-info">
+          <span class="debt-text">${getAvatar(state, d.from)} <b>${esc(d.from)}</b> owes ${getAvatar(state, d.to)} <b>${esc(d.to)}</b></span>
+          ${pm ? `<span class="debt-payment">💳 ${esc(pm)}</span>` : ""}
+        </div>
+        <div class="debt-actions">
+          <span class="debt-amount">${sym}${d.amount.toFixed(2)}</span>
+          <button class="btn-settle" data-settle-from="${esc(d.from)}" data-settle-to="${esc(d.to)}" data-settle-currency="${currency}" data-settle-amount="${d.amount.toFixed(2)}">✅ Settle</button>
+        </div>
       </div>
     `;
 			})
@@ -224,16 +235,16 @@ export function renderTxnLog(state: GroupState): void {
 		.map((e) => {
 			const sym = getSymbol(e.currency);
 			const isSettlement = e.desc.startsWith("💸 Settlement");
-			const isDeleted = e.desc.startsWith("❌ Deleted");
+			const isDeleted = e.deleted;
 			const icon = isDeleted ? "❌" : isSettlement ? "🤝" : "🧾";
 			return `
 		<div class="txn-item ${isSettlement ? "txn-settlement" : ""} ${isDeleted ? "txn-deleted" : ""}">
 			<span class="txn-icon">${icon}</span>
 			<div class="txn-details">
 				<span class="txn-desc">${esc(e.desc)}</span>
-				<span class="txn-meta">${getAvatar(e.paidBy)} ${esc(e.paidBy)} · ${e.date}${e.time ? " " + e.time : ""}${e.addedBy ? ` · by ${getAvatar(e.addedBy)} ${esc(e.addedBy)}` : ""}</span>
+				<span class="txn-meta">${getAvatar(state, e.paidBy)} ${esc(e.paidBy)} · ${formatDate(e.createdAt)}</span>
 			</div>
-			<span class="txn-amount ${isSettlement ? "txn-amount-settle" : ""}">${sym}${(isDeleted && e.originalAmount ? e.originalAmount : e.amount || 0).toFixed(2)}</span>
+			<span class="txn-amount ${isSettlement ? "txn-amount-settle" : ""}">${sym}${e.amount.toFixed(2)}</span>
 		</div>`;
 		})
 		.join("");
@@ -248,26 +259,20 @@ export function renderCurrencyPref(): void {
 // --- Main render orchestrator ---
 
 export function renderLanding(): void {
-	const groups = loadGroups();
 	const landing = $("#landing-page") as HTMLElement;
 	const appContent = $("#app-content") as HTMLElement;
-	if (!groups.length) {
-		landing.hidden = false;
-		appContent.hidden = true;
-		window.history.replaceState(null, "", window.location.pathname);
-	} else {
-		landing.hidden = true;
-		appContent.hidden = false;
-	}
+	landing.hidden = false;
+	appContent.hidden = true;
 }
 
 export function render(state: GroupState): void {
-	const groups = loadGroups();
-	renderLanding();
-	if (!groups.length) return;
+	const landing = $("#landing-page") as HTMLElement;
+	const appContent = $("#app-content") as HTMLElement;
+	landing.hidden = true;
+	appContent.hidden = false;
+
 	renderGroupSwitcher(state);
 	renderGroup(state);
-	renderIam(state);
 	renderMembers(state);
 	renderExpenseForm(state);
 	renderExpenses(state);

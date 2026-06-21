@@ -1,43 +1,10 @@
 import type { GroupState } from "./types";
-import { loadGroups, saveGroups, getActiveIndex, setActiveIndex } from "./state";
-import { syncGroupToFirebase, listenToGroup, stopListening, isFirebaseEnabled } from "./firebase";
+import { cacheGroup, getCachedGroup, addMyGroupId, setActiveGroupId, mergeGroupStates } from "./state";
+import { syncGroupToFirebase, syncGroupToFirebaseAsync, fetchGroup, listenToGroup, stopListening, isFirebaseEnabled } from "./firebase";
 import { showToast } from "../shared/utils";
 
 let onRemoteState: ((s: GroupState) => void) | null = null;
 let localUpdatedAt = 0;
-
-// --- Merge: combine records from two copies of the same group ---
-
-function mergeGroups(local: GroupState, remote: GroupState): GroupState {
-	const localExpenseIds = new Set(local.expenses.map((e) => e.id));
-	const remoteExpenseIds = new Set(remote.expenses.map((e) => e.id));
-
-	// Start with local expenses, update any that exist in both (remote wins for shared IDs)
-	const merged = local.expenses.map((e) => {
-		if (remoteExpenseIds.has(e.id)) {
-			return remote.expenses.find((r) => r.id === e.id)!;
-		}
-		return e;
-	});
-
-	// Add expenses only in remote
-	for (const e of remote.expenses) {
-		if (!localExpenseIds.has(e.id)) {
-			merged.push(e);
-		}
-	}
-
-	// Merge members (union of both)
-	const memberSet = new Set([...local.members, ...remote.members]);
-
-	return {
-		id: local.id,
-		name: remote.updatedAt >= (local.updatedAt || 0) ? remote.name : local.name,
-		members: [...memberSet],
-		expenses: merged,
-		updatedAt: Math.max(remote.updatedAt || 0, local.updatedAt || 0),
-	};
-}
 
 export function initSync(setter: (s: GroupState) => void): void {
 	onRemoteState = setter;
@@ -56,74 +23,69 @@ function debouncedFirebaseWrite(state: GroupState): void {
 	}, 500);
 }
 
-// --- commit: the single persist function ---
+// --- commit: persist state ---
 
 export function commit(state: GroupState): void {
 	state.updatedAt = Date.now();
 	localUpdatedAt = state.updatedAt;
-
-	const groups = loadGroups();
-	const idx = getActiveIndex();
-	if (idx < groups.length) {
-		groups[idx] = state;
-	} else {
-		groups.push(state);
-	}
-	saveGroups(groups);
-
+	cacheGroup(state);
 	debouncedFirebaseWrite(state);
 }
 
-// --- importGroup: shared import utility ---
-
-export function importGroup(imported: GroupState): GroupState {
-	if (!imported.id) {
-		imported.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+// Force immediate write to Firebase (call before sharing, awaitable)
+export async function flushToFirebase(state: GroupState): Promise<boolean> {
+	if (!isFirebaseEnabled()) return false;
+	if (firebaseTimer) {
+		clearTimeout(firebaseTimer);
+		firebaseTimer = null;
 	}
-	if (!imported.updatedAt) {
-		imported.updatedAt = Date.now();
-	}
-
-	const groups = loadGroups();
-	const idIdx = groups.findIndex((g) => g.id === imported.id);
-
-	if (idIdx !== -1) {
-		const existing = groups[idIdx];
-		const merged = mergeGroups(existing, imported);
-		groups[idIdx] = merged;
-		saveGroups(groups);
-		setActiveIndex(idIdx);
-		showToast(`Updated "${merged.name}" — synced & merged data 🔄`);
-		localUpdatedAt = merged.updatedAt;
-		return merged;
-	} else {
-		groups.push(imported);
-		saveGroups(groups);
-		setActiveIndex(groups.length - 1);
-		showToast(`Group "${imported.name}" added! ✅`);
-	}
-
-	localUpdatedAt = imported.updatedAt;
-	return imported;
+	return syncGroupToFirebaseAsync(state);
 }
 
-// --- Firebase listener: single implementation ---
+// --- importGroup: join a group from a link ---
+
+export interface ImportResult {
+	state: GroupState;
+	isNew: boolean;
+}
+
+export async function importGroup(groupId: string): Promise<ImportResult | null> {
+	let remote = await fetchGroup(groupId);
+	if (!remote) {
+		await new Promise((r) => setTimeout(r, 1000));
+		remote = await fetchGroup(groupId);
+	}
+	if (!remote) return null;
+
+	const cached = getCachedGroup(groupId);
+	const merged = cached ? mergeGroupStates(cached, remote) : remote;
+
+	cacheGroup(merged);
+	addMyGroupId(merged.id);
+	setActiveGroupId(merged.id);
+	localUpdatedAt = merged.updatedAt;
+
+	if (cached) {
+		showToast(`Synced "${merged.name}" 🔄`);
+	} else {
+		showToast(`Joined "${merged.name}" ✅`);
+	}
+
+	return { state: merged, isNew: !cached };
+}
+
+// --- Firebase listener ---
 
 function handleRemoteUpdate(updated: GroupState): void {
 	if (!updated.updatedAt) updated.updatedAt = 0;
-
-	// Echo suppression: ignore if remote is not newer
 	if (updated.updatedAt <= localUpdatedAt) return;
 
-	const groups = loadGroups();
-	const idx = getActiveIndex();
-	if (groups[idx]?.id === updated.id) {
-		const merged = mergeGroups(groups[idx], updated);
-		localUpdatedAt = merged.updatedAt;
-		groups[idx] = merged;
-		saveGroups(groups);
-		if (onRemoteState) onRemoteState(merged);
-	}
+	const cached = getCachedGroup(updated.id);
+	const merged = cached ? mergeGroupStates(cached, updated) : updated;
+
+	localUpdatedAt = merged.updatedAt;
+	cacheGroup(merged);
+	if (onRemoteState) onRemoteState(merged);
 }
 
 export function subscribeToGroup(groupId: string): void {

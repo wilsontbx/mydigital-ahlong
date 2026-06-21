@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { showDialog, showAvatarPicker, showPayUpModal, showSettledModal, showMemberMenu } from "./dialogs";
-import { saveAvatars, savePaymentMethods, loadPaymentMethods, loadAvatars } from "../core/state";
+import { showDialog, showSettledModal, showMemberMenu } from "./dialogs";
+import type { GroupState, Member } from "../core/types";
 
 function setupDom() {
 	document.body.innerHTML = `
@@ -11,13 +11,12 @@ function setupDom() {
 			<input id="dialog-input" />
 			<div id="dialog-buttons"></div>
 		</div>
-		<div id="meme-modal" hidden></div>
-		<div id="modal-meme"></div>
-		<div id="modal-msg"></div>
-		<div id="modal-quote"></div>
-		<button id="modal-settle-btn"></button>
 		<div id="toast"></div>
 	`;
+}
+
+function makeState(members: Member[] = []): GroupState {
+	return { id: "g1", name: "Test", members, expenses: [], createdAt: 1000, updatedAt: 2000 };
 }
 
 beforeEach(() => {
@@ -78,128 +77,78 @@ describe("dialogs", () => {
 		expect(onCancel).toHaveBeenCalledTimes(1);
 	});
 
-	it("showMemberMenu removes payment", () => {
-		saveAvatars({ Alice: "😎" });
-		savePaymentMethods({ Alice: "PayNow" });
-		const onRender = vi.fn();
-		showMemberMenu("Alice", "PayNow", onRender, vi.fn());
+	it("showMemberMenu remove payment calls onPaymentChange with empty", () => {
+		const state = makeState([{ name: "Alice", payment: "PayNow", avatar: "😎" }]);
+		const onPaymentChange = vi.fn();
+		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange, onRemove: vi.fn(), onRename: vi.fn() });
 
 		(document.querySelector(".dialog-btn-remove-payment") as HTMLButtonElement).click();
-		expect(loadPaymentMethods().Alice).toBeUndefined();
-		expect(onRender).toHaveBeenCalled();
+		expect(onPaymentChange).toHaveBeenCalledWith("");
 	});
 
-	it("showMemberMenu remove member path executes callback", () => {
-		saveAvatars({ Alice: "😀" });
-		savePaymentMethods({ Alice: "PayNow" });
-		const onRender = vi.fn();
+	it("showMemberMenu remove member calls onRemove", () => {
+		const state = makeState([{ name: "Alice", payment: "PayNow", avatar: "😀" }]);
 		const onRemove = vi.fn();
-		showMemberMenu("Alice", "PayNow", onRender, onRemove);
+		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove, onRename: vi.fn() });
 
 		(document.querySelector(".dialog-btn-remove") as HTMLButtonElement).click();
 		(document.querySelector(".dialog-btn-confirm") as HTMLButtonElement).click();
-		expect(onRemove).toHaveBeenCalledWith("Alice");
+		expect(onRemove).toHaveBeenCalled();
 	});
 
-	it("showMemberMenu payment edit updates payment", () => {
-		saveAvatars({ Alice: "😀" });
-		savePaymentMethods({ Alice: "PayNow" });
-		const onRender = vi.fn();
-		showMemberMenu("Alice", "PayNow", onRender, vi.fn());
+	it("showMemberMenu payment edit calls onPaymentChange", () => {
+		const state = makeState([{ name: "Alice", payment: "PayNow", avatar: "😀" }]);
+		const onPaymentChange = vi.fn();
+		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange, onRemove: vi.fn(), onRename: vi.fn() });
 
 		(document.querySelector(".dialog-btn-payment") as HTMLButtonElement).click();
 		const input = document.querySelector("#dialog-input") as HTMLInputElement;
 		input.value = "DuitNow 999";
 		(document.querySelector(".dialog-btn-confirm") as HTMLButtonElement).click();
 
-		expect(loadPaymentMethods().Alice).toBe("DuitNow 999");
-		expect(onRender).toHaveBeenCalled();
-	});
-
-	it("showMemberMenu payment edit with empty value removes payment", () => {
-		saveAvatars({ Alice: "😀" });
-		savePaymentMethods({ Alice: "PayNow" });
-		const onRender = vi.fn();
-		showMemberMenu("Alice", "PayNow", onRender, vi.fn());
-
-		(document.querySelector(".dialog-btn-payment") as HTMLButtonElement).click();
-		const input = document.querySelector("#dialog-input") as HTMLInputElement;
-		input.value = "   ";
-		(document.querySelector(".dialog-btn-confirm") as HTMLButtonElement).click();
-
-		expect(loadPaymentMethods().Alice).toBeUndefined();
-		expect(onRender).toHaveBeenCalled();
+		expect(onPaymentChange).toHaveBeenCalledWith("DuitNow 999");
 	});
 
 	it("showMemberMenu avatar button opens avatar picker", () => {
-		saveAvatars({ Alice: "😀" });
-		showMemberMenu("Alice", "", vi.fn(), vi.fn());
+		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
+		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename: vi.fn() });
 		(document.querySelector(".dialog-btn-avatar") as HTMLButtonElement).click();
 		expect(document.querySelector(".avatar-grid")).toBeTruthy();
 	});
 
+	it("showMemberMenu avatar picker calls onAvatarChange", () => {
+		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
+		const onAvatarChange = vi.fn();
+		showMemberMenu(state, "Alice", { onAvatarChange, onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename: vi.fn() });
+		(document.querySelector(".dialog-btn-avatar") as HTMLButtonElement).click();
+		const first = document.querySelector("[data-avatar]") as HTMLButtonElement;
+		first.click();
+		expect(onAvatarChange).toHaveBeenCalledWith(first.dataset.avatar);
+	});
+
 	it("showMemberMenu rename triggers onRename callback", () => {
-		saveAvatars({ Alice: "😀" });
-		const onRender = vi.fn();
-		const onRemove = vi.fn();
+		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
 		const onRename = vi.fn();
-		showMemberMenu("Alice", "", onRender, onRemove, onRename);
+		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename });
 
 		(document.querySelector(".dialog-btn-rename") as HTMLButtonElement).click();
 		const input = document.querySelector("#dialog-input") as HTMLInputElement;
 		input.value = "Alicia";
 		(document.querySelector(".dialog-btn-confirm") as HTMLButtonElement).click();
 
-		expect(onRename).toHaveBeenCalledWith("Alice", "Alicia");
-	});
-
-	it("showMemberMenu rename does nothing if same name", () => {
-		saveAvatars({ Alice: "😀" });
-		const onRename = vi.fn();
-		showMemberMenu("Alice", "", vi.fn(), vi.fn(), onRename);
-
-		(document.querySelector(".dialog-btn-rename") as HTMLButtonElement).click();
-		const input = document.querySelector("#dialog-input") as HTMLInputElement;
-		input.value = "Alice";
-		(document.querySelector(".dialog-btn-confirm") as HTMLButtonElement).click();
-
-		expect(onRename).not.toHaveBeenCalled();
+		expect(onRename).toHaveBeenCalledWith("Alicia");
 	});
 
 	it("showMemberMenu close button hides modal", () => {
-		saveAvatars({ Alice: "😀" });
-		showMemberMenu("Alice", "", vi.fn(), vi.fn());
+		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
+		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename: vi.fn() });
 		(document.querySelector(".dialog-btn-cancel") as HTMLButtonElement).click();
 		expect((document.querySelector("#dialog-modal") as HTMLElement).hidden).toBe(true);
 	});
 
-	it("showAvatarPicker updates avatar", () => {
-		saveAvatars({ Alice: "😀" });
-		const onRender = vi.fn();
-		showAvatarPicker("Alice", onRender);
-		const first = document.querySelector("[data-avatar]") as HTMLButtonElement;
-		first.click();
-		expect(loadAvatars().Alice).toBe(first.dataset.avatar);
-		expect(onRender).toHaveBeenCalled();
-	});
-
-	it("showPayUpModal fills modal content and datasets", () => {
-		savePaymentMethods({ Alice: "DuitNow 123" });
-		showPayUpModal("Bob", "Alice", "RM15.00", "MYR", "15.00");
-
-		const btn = document.querySelector("#modal-settle-btn") as HTMLButtonElement;
-		expect((document.querySelector("#meme-modal") as HTMLElement).hidden).toBe(false);
-		expect(document.querySelector("#modal-msg")!.innerHTML).toContain("owes");
-		expect(btn.dataset.from).toBe("Bob");
-		expect(btn.dataset.to).toBe("Alice");
-		expect(btn.dataset.currency).toBe("MYR");
-		expect(btn.dataset.amount).toBe("15.00");
-	});
-
-	it("showSettledModal hides settle button and opens modal", () => {
+	it("showSettledModal opens dialog with success", () => {
 		showSettledModal("Bob", "Alice");
-		expect(document.querySelector("#modal-msg")!.innerHTML).toContain("paid");
-		expect((document.querySelector("#modal-settle-btn") as HTMLButtonElement).style.display).toBe("none");
-		expect((document.querySelector("#meme-modal") as HTMLElement).hidden).toBe(false);
+		expect((document.querySelector("#dialog-modal") as HTMLElement).hidden).toBe(false);
+		expect(document.querySelector("#dialog-title")!.textContent).toContain("Bob paid Alice");
 	});
 });

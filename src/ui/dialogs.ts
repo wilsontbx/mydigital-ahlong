@@ -1,6 +1,6 @@
-import type { DialogOptions } from "../core/types";
-import { $, esc, pickRandom, showToast } from "../shared/utils";
-import { loadAvatars, saveAvatars, loadPaymentMethods, savePaymentMethods, AVATAR_OPTIONS } from "../core/state";
+import type { DialogOptions, GroupState } from "../core/types";
+import { $, pickRandom, showToast } from "../shared/utils";
+import { AVATAR_OPTIONS } from "../core/state";
 
 // --- Dialog constants ---
 
@@ -17,25 +17,6 @@ const DIALOG_QUOTES: Record<string, string[]> = {
 	prompt: ["make it iconic", "choose wisely (or not, it's just a name)", "naming things is the hardest problem in CS", "no pressure... ok maybe a little pressure", "type something fire 🔥"],
 };
 
-const MEME_QUOTES: string[] = [
-	"friendship ended with {from}. now money is my best friend.",
-	"bro really said 'i'll transfer later' 3 weeks ago 💀",
-	"{from} acting like this is a charity",
-	"the audacity... the AUDACITY",
-	"*seen* ✓✓",
-	"this is why we have trust issues",
-	"imagine being {from} rn... couldn't be me",
-	"{from}'s wallet: 👻",
-	"PayNow exists bro... PayNow EXISTS",
-	"every day you don't pay, the group chat gets more passive aggressive",
-	"you vs the debt {to} told you not to worry about",
-	"POV: you're waiting for {from} to pay back",
-	"i'm not angry, i'm just disappointed - {to}, probably",
-	"this message was sponsored by {from}'s outstanding debt",
-	"bro thinks we forgot 💀",
-];
-
-const MEME_EMOJIS: string[] = ["💀", "🫠", "😤", "🤡", "💸", "🧾", "😭", "🫵", "👀", "🚨"];
 
 const SETTLE_QUOTES: string[] = [
 	"FRIENDSHIP RESTORED 🤝",
@@ -51,23 +32,18 @@ const SETTLE_QUOTES: string[] = [
 
 const SETTLE_EMOJIS: string[] = ["🎉", "🥳", "🙏", "💰", "🫶", "✨", "🌟"];
 
-// --- Helper ---
-
-function getAvatar(name: string): string {
-	const avatars = loadAvatars();
-	return avatars[name] || "😀";
-}
-
 // --- Show Dialog ---
 
 export function showDialog({ type = "error", title, defaultValue = "", onConfirm, onCancel, allowEmpty = false, onRandomize }: DialogOptions): void {
 	const modal = $("#dialog-modal");
+	const dialogBox = modal.querySelector(".dialog-modal") as HTMLElement | null;
 	const emojiEl = $("#dialog-emoji");
 	const titleEl = $("#dialog-title");
 	const quoteEl = $("#dialog-quote");
 	const inputEl = $("#dialog-input") as HTMLInputElement;
 	const buttonsEl = $("#dialog-buttons");
 
+	if (dialogBox) dialogBox.dataset.type = type;
 	emojiEl.textContent = pickRandom(DIALOG_EMOJIS[type] || DIALOG_EMOJIS.error);
 	titleEl.textContent = title;
 	quoteEl.textContent = `"${pickRandom(DIALOG_QUOTES[type] || DIALOG_QUOTES.error)}"`;
@@ -160,7 +136,17 @@ export function showDialog({ type = "error", title, defaultValue = "", onConfirm
 
 // --- Member Menu ---
 
-export function showMemberMenu(name: string, currentPayment: string, onRender: () => void, onRemove: (name: string) => void, onRename?: (oldName: string, newName: string) => void): void {
+interface MemberMenuCallbacks {
+	onAvatarChange: (avatar: string) => void;
+	onPaymentChange: (payment: string) => void;
+	onRemove: () => void;
+	onRename: (newName: string) => void;
+}
+
+export function showMemberMenu(state: GroupState, name: string, callbacks: MemberMenuCallbacks): void {
+	const member = state.members.find((m) => m.name === name);
+	if (!member) return;
+
 	const modal = $("#dialog-modal");
 	const emojiEl = $("#dialog-emoji");
 	const titleEl = $("#dialog-title");
@@ -168,23 +154,23 @@ export function showMemberMenu(name: string, currentPayment: string, onRender: (
 	const inputEl = $("#dialog-input") as HTMLInputElement;
 	const buttonsEl = $("#dialog-buttons");
 
-	emojiEl.textContent = getAvatar(name);
+	emojiEl.textContent = member.avatar;
 	titleEl.textContent = name;
-	quoteEl.textContent = currentPayment ? `💳 ${currentPayment}` : "no payment method set";
+	quoteEl.textContent = member.payment ? `💳 ${member.payment}` : "no payment method set";
 	inputEl.hidden = true;
 
 	buttonsEl.innerHTML = `
 		<button class="btn dialog-btn-rename">✏️ Rename</button>
 		<button class="btn dialog-btn-avatar">🎭 Change Icon</button>
 		<button class="btn dialog-btn-payment">💳 Edit Payment</button>
-		${currentPayment ? `<button class="btn dialog-btn-remove-payment">❌ Remove Payment</button>` : ""}
+		${member.payment ? `<button class="btn dialog-btn-remove-payment">❌ Remove Payment</button>` : ""}
 		<button class="btn dialog-btn-remove">🗑️ Remove Member</button>
 		<button class="btn dialog-btn-cancel">close</button>
 	`;
 
 	buttonsEl.querySelector<HTMLButtonElement>(".dialog-btn-avatar")!.onclick = () => {
 		modal.hidden = true;
-		showAvatarPicker(name, onRender);
+		showAvatarPicker(name, member.avatar, callbacks.onAvatarChange);
 	};
 
 	buttonsEl.querySelector<HTMLButtonElement>(".dialog-btn-rename")!.onclick = () => {
@@ -194,20 +180,17 @@ export function showMemberMenu(name: string, currentPayment: string, onRender: (
 			title: `Rename "${name}" to:`,
 			defaultValue: name,
 			onConfirm: (newName) => {
-				if (newName && newName.trim() && newName.trim() !== name && onRename) {
-					onRename(name, newName.trim());
+				if (newName && newName.trim() && newName.trim() !== name) {
+					callbacks.onRename(newName.trim());
 				}
 			},
 		});
 	};
 
-	if (currentPayment) {
+	if (member.payment) {
 		buttonsEl.querySelector<HTMLButtonElement>(".dialog-btn-remove-payment")!.onclick = () => {
 			modal.hidden = true;
-			const pm = loadPaymentMethods();
-			delete pm[name];
-			savePaymentMethods(pm);
-			onRender();
+			callbacks.onPaymentChange("");
 			showToast(`💳 Removed payment for ${name}`);
 		};
 	}
@@ -217,16 +200,9 @@ export function showMemberMenu(name: string, currentPayment: string, onRender: (
 		showDialog({
 			type: "prompt",
 			title: `Payment method for ${name}:`,
-			defaultValue: currentPayment,
+			defaultValue: member.payment,
 			onConfirm: (val) => {
-				const pm = loadPaymentMethods();
-				if (val) {
-					pm[name] = val;
-				} else {
-					delete pm[name];
-				}
-				savePaymentMethods(pm);
-				onRender();
+				callbacks.onPaymentChange(val || "");
 				showToast(val ? `💳 Updated payment for ${name}` : `💳 Removed payment for ${name}`);
 			},
 			allowEmpty: true,
@@ -239,11 +215,7 @@ export function showMemberMenu(name: string, currentPayment: string, onRender: (
 			type: "confirm",
 			title: `Remove ${name}? Their expenses go poof too 💨`,
 			onConfirm: () => {
-				onRemove(name);
-				const pm = loadPaymentMethods();
-				delete pm[name];
-				savePaymentMethods(pm);
-				onRender();
+				callbacks.onRemove();
 			},
 		});
 	};
@@ -257,7 +229,7 @@ export function showMemberMenu(name: string, currentPayment: string, onRender: (
 
 // --- Avatar Picker ---
 
-export function showAvatarPicker(name: string, onRender: () => void): void {
+function showAvatarPicker(name: string, currentAvatar: string, onPick: (avatar: string) => void): void {
 	const modal = $("#dialog-modal");
 	const emojiEl = $("#dialog-emoji");
 	const titleEl = $("#dialog-title");
@@ -265,24 +237,21 @@ export function showAvatarPicker(name: string, onRender: () => void): void {
 	const inputEl = $("#dialog-input") as HTMLInputElement;
 	const buttonsEl = $("#dialog-buttons");
 
-	emojiEl.textContent = getAvatar(name);
+	emojiEl.textContent = currentAvatar;
 	titleEl.textContent = `Pick an icon for ${name}`;
 	quoteEl.textContent = `"choose your fighter"`;
 	inputEl.hidden = true;
 
 	buttonsEl.innerHTML = `
 		<div class="avatar-grid">
-			${AVATAR_OPTIONS.map((a) => `<button class="avatar-option ${a === getAvatar(name) ? "avatar-selected" : ""}" data-avatar="${a}">${a}</button>`).join("")}
+			${AVATAR_OPTIONS.map((a) => `<button class="avatar-option ${a === currentAvatar ? "avatar-selected" : ""}" data-avatar="${a}">${a}</button>`).join("")}
 		</div>
 	`;
 
 	buttonsEl.querySelectorAll<HTMLButtonElement>("[data-avatar]").forEach((btn) => {
 		btn.onclick = () => {
-			const avatars = loadAvatars();
-			avatars[name] = btn.dataset.avatar!;
-			saveAvatars(avatars);
 			modal.hidden = true;
-			onRender();
+			onPick(btn.dataset.avatar!);
 			showToast(`${btn.dataset.avatar} Icon updated for ${name}`);
 		};
 	});
@@ -290,29 +259,7 @@ export function showAvatarPicker(name: string, onRender: () => void): void {
 	modal.hidden = false;
 }
 
-// --- Pay Up Modal ---
-
-export function showPayUpModal(from: string, to: string, amount: string, _currency: string, rawAmount: string): void {
-	const quote = pickRandom(MEME_QUOTES)
-		.replace(/\{from\}/g, from)
-		.replace(/\{to\}/g, to);
-	const emoji = pickRandom(MEME_EMOJIS);
-	const pm = loadPaymentMethods()[to] || "";
-
-	$("#modal-meme").textContent = emoji;
-	$("#modal-msg").innerHTML = `<b>${esc(from)}</b> owes <b>${esc(to)}</b> <span class="modal-amount">${amount}</span>${pm ? `<br><span class="modal-payment">💳 Pay via: ${esc(pm)}</span>` : ""}`;
-	$("#modal-quote").textContent = `"${quote}"`;
-
-	const settleBtn = $("#modal-settle-btn") as HTMLButtonElement;
-	settleBtn.style.display = "";
-	settleBtn.dataset.from = from;
-	settleBtn.dataset.to = to;
-	settleBtn.dataset.currency = _currency;
-	settleBtn.dataset.amount = rawAmount;
-	$("#meme-modal").hidden = false;
-}
-
-// --- Settled Modal ---
+// --- Settled Modal (uses dialog system) ---
 
 export function showSettledModal(from: string, to: string): void {
 	const quote = pickRandom(SETTLE_QUOTES)
@@ -320,9 +267,12 @@ export function showSettledModal(from: string, to: string): void {
 		.replace(/\{to\}/g, to);
 	const emoji = pickRandom(SETTLE_EMOJIS);
 
-	$("#modal-meme").textContent = emoji;
-	$("#modal-msg").innerHTML = `<b>${esc(from)}</b> paid <b>${esc(to)}</b>`;
-	$("#modal-quote").textContent = `"${quote}"`;
-	($("#modal-settle-btn") as HTMLButtonElement).style.display = "none";
-	$("#meme-modal").hidden = false;
+	showDialog({
+		type: "success",
+		title: `${from} paid ${to}! ${emoji}`,
+		onConfirm: () => {},
+	});
+
+	const quoteEl = $("#dialog-quote");
+	quoteEl.textContent = `"${quote}"`;
 }

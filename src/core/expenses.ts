@@ -1,4 +1,4 @@
-import type { Expense, GroupState, Debt } from "./types";
+import type { Expense, GroupState, Debt, Member } from "./types";
 
 let _id = Date.now();
 function genId(): string {
@@ -11,68 +11,67 @@ interface AddExpenseParams {
 	paidBy: string;
 	splitAmong: string[];
 	currency: string;
-	addedBy: string;
 }
 
 export function addExpense(state: GroupState, params: AddExpenseParams): GroupState {
-	const now = new Date();
 	const expense: Expense = {
 		id: genId(),
 		desc: params.desc,
 		amount: Math.round(params.amount * 100) / 100,
 		paidBy: params.paidBy,
-		splitAmong: params.splitAmong.length ? params.splitAmong : [...state.members],
+		splitAmong: params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.name),
 		currency: params.currency,
-		addedBy: params.addedBy || "",
-		date: now.toISOString().slice(0, 10),
-		time: now.toTimeString().slice(0, 5),
+		createdAt: Date.now(),
+		deleted: false,
 	};
 	state.expenses.push(expense);
 	return state;
 }
 
-export function removeExpense(state: GroupState, id: string): GroupState {
-	state.expenses = state.expenses.filter((e) => e.id !== id);
+export function deleteExpense(state: GroupState, id: string): GroupState {
+	const expense = state.expenses.find((e) => e.id === id);
+	if (expense) expense.deleted = true;
 	return state;
 }
 
-export function addMember(state: GroupState, name: string): GroupState {
+export function addMember(state: GroupState, name: string, payment = ""): GroupState {
 	const trimmed = name.trim();
-	if (trimmed && !state.members.includes(trimmed)) {
-		state.members.push(trimmed);
+	if (trimmed && !state.members.some((m) => m.name === trimmed)) {
+		const member: Member = { name: trimmed, payment, avatar: "😀" };
+		state.members.push(member);
 	}
 	return state;
 }
 
 export function removeMember(state: GroupState, name: string): GroupState {
-	state.members = state.members.filter((m) => m !== name);
-	state.expenses = state.expenses.filter((e) => {
-		if (e.paidBy === name) return false;
+	state.members = state.members.filter((m) => m.name !== name);
+	for (const e of state.expenses) {
+		if (e.paidBy === name) e.deleted = true;
 		e.splitAmong = e.splitAmong.filter((m) => m !== name);
-		return e.splitAmong.length > 0;
-	});
+		if (e.splitAmong.length === 0 && !e.deleted) e.deleted = true;
+	}
 	return state;
 }
 
 export function renameMember(state: GroupState, oldName: string, newName: string): GroupState {
-	const idx = state.members.indexOf(oldName);
-	if (idx === -1) return state;
-	state.members[idx] = newName;
+	const member = state.members.find((m) => m.name === oldName);
+	if (!member) return state;
+	member.name = newName;
 	for (const e of state.expenses) {
 		if (e.paidBy === oldName) e.paidBy = newName;
-		if (e.addedBy === oldName) e.addedBy = newName;
 		e.splitAmong = e.splitAmong.map((m) => (m === oldName ? newName : m));
 	}
 	return state;
 }
 
-// --- Balance calculation ---
+// --- Balance calculation (excludes deleted expenses) ---
 
-export function calcBalances(expenses: Expense[], members: string[]): Record<string, number> {
+export function calcBalances(expenses: Expense[], members: Member[]): Record<string, number> {
 	const balances: Record<string, number> = {};
-	for (const m of members) balances[m] = 0;
+	for (const m of members) balances[m.name] = 0;
 
 	for (const exp of expenses) {
+		if (exp.deleted) continue;
 		const share = exp.amount / exp.splitAmong.length;
 		balances[exp.paidBy] = (balances[exp.paidBy] || 0) + exp.amount;
 		for (const m of exp.splitAmong) {
@@ -85,15 +84,16 @@ export function calcBalances(expenses: Expense[], members: string[]): Record<str
 
 // --- Simplify debts (min transactions) ---
 
-export function simplifyDebts(expenses: Expense[], members: string[]): Debt[] {
+export function simplifyDebts(expenses: Expense[], members: Member[]): Debt[] {
+	const memberNames = members.map((m) => m.name);
 	const balances = calcBalances(expenses, members);
 	const debts: Debt[] = [];
 
 	const creditors: { person: string; amount: number }[] = [];
 	const debtors: { person: string; amount: number }[] = [];
 
-	for (const [person, amount] of Object.entries(balances)) {
-		const rounded = Math.round(amount * 100) / 100;
+	for (const person of memberNames) {
+		const rounded = Math.round((balances[person] || 0) * 100) / 100;
 		if (rounded > 0.01) creditors.push({ person, amount: rounded });
 		else if (rounded < -0.01) debtors.push({ person, amount: -rounded });
 	}

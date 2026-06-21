@@ -3,6 +3,12 @@ export interface Currency {
 	symbol: string;
 }
 
+export interface Member {
+	name: string;
+	payment: string;
+	avatar: string;
+}
+
 export interface Expense {
 	id: string;
 	desc: string;
@@ -10,17 +16,16 @@ export interface Expense {
 	paidBy: string;
 	splitAmong: string[];
 	currency: string;
-	addedBy: string;
-	date: string;
-	time: string;
-	originalAmount?: number;
+	createdAt: number;
+	deleted: boolean;
 }
 
 export interface GroupState {
 	id: string;
 	name: string;
-	members: string[];
+	members: Member[];
 	expenses: Expense[];
+	createdAt: number;
 	updatedAt: number;
 }
 

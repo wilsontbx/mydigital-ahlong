@@ -1,18 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock matchMedia before any imports that use it
 Object.defineProperty(window, "matchMedia", {
-	value: vi.fn(() => ({ matches: false })),
+	value: vi.fn(() => ({ matches: false, addEventListener: vi.fn() })),
 	configurable: true,
 });
 
 vi.mock("./core/state", () => ({
-	loadState: vi.fn(() => ({ id: "test", name: "Boot", members: [], expenses: [] })),
-	groupJustImported: false,
-	decodeState: vi.fn(),
-	loadGroups: vi.fn(() => []),
-	saveGroups: vi.fn(),
-	setActiveIndex: vi.fn(),
+	createEmptyState: vi.fn(() => ({ id: "new", name: "New", members: [], expenses: [], createdAt: 1, updatedAt: 1 })),
+	getMyGroupIds: vi.fn(() => []),
+	addMyGroupId: vi.fn(),
+	removeMyGroupId: vi.fn(),
+	getActiveGroupId: vi.fn(() => null),
+	setActiveGroupId: vi.fn(),
+	cacheGroup: vi.fn(),
+	getCachedGroup: vi.fn(() => null),
+	removeCachedGroup: vi.fn(),
+	mergeGroupStates: vi.fn((_a, b) => b),
+}));
+
+vi.mock("./core/firebase", () => ({
+	isFirebaseEnabled: vi.fn(() => false),
+	fetchGroup: vi.fn(async () => null),
+}));
+
+vi.mock("./core/sync", () => ({
+	initSync: vi.fn(),
+	commit: vi.fn(),
+	subscribeToGroup: vi.fn(),
+	setLocalUpdatedAt: vi.fn(),
+	importGroup: vi.fn(async () => null),
 }));
 
 vi.mock("./ui/render", () => ({
@@ -32,30 +48,21 @@ vi.mock("./shared/utils", () => ({
 	showToast: vi.fn(),
 }));
 
-import { loadState } from "./core/state";
-import { render } from "./ui/render";
+import { renderLanding } from "./ui/render";
 import { setupEvents } from "./ui/events";
 
 describe("app bootstrap", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		localStorage.clear();
 	});
 
-	it("loads state, sets up events, and renders (landing page shown via render when no groups)", async () => {
+	it("shows landing page when no groups exist", async () => {
 		vi.resetModules();
 		await import("./app");
+		await new Promise((r) => setTimeout(r, 10));
 
-		expect(loadState).toHaveBeenCalledTimes(1);
-		expect(setupEvents).toHaveBeenCalledTimes(1);
-		expect(render).toHaveBeenCalledWith({ id: "test", name: "Boot", members: [], expenses: [] });
-
-		const getState = (setupEvents as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as () => {
-			name: string;
-			members: string[];
-			expenses: unknown[];
-		};
-		const setState = (setupEvents as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1] as (s: { name: string; members: string[]; expenses: unknown[] }) => void;
-		setState({ name: "Changed", members: ["A"], expenses: [] });
-		expect(getState()).toEqual({ name: "Changed", members: ["A"], expenses: [] });
+		expect(renderLanding).toHaveBeenCalled();
+		expect(setupEvents).toHaveBeenCalled();
 	});
 });

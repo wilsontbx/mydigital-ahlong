@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { addMember, removeMember, renameMember, addExpense, removeExpense, calcBalances, simplifyDebts } from "./expenses";
-import type { GroupState } from "./types";
+import { addMember, removeMember, renameMember, addExpense, deleteExpense, calcBalances, simplifyDebts } from "./expenses";
+import type { GroupState, Member, Expense } from "./types";
 
 function makeState(): GroupState {
 	return {
@@ -8,7 +8,26 @@ function makeState(): GroupState {
 		name: "Test Group",
 		members: [],
 		expenses: [],
+		createdAt: Date.now(),
 		updatedAt: Date.now(),
+	};
+}
+
+function makeMember(name: string, payment = "", avatar = "😀"): Member {
+	return { name, payment, avatar };
+}
+
+function makeExpense(overrides: Partial<Expense> = {}): Expense {
+	return {
+		id: "e1",
+		desc: "Test",
+		amount: 10,
+		paidBy: "Alice",
+		splitAmong: ["Alice", "Bob"],
+		currency: "MYR",
+		createdAt: Date.now(),
+		deleted: false,
+		...overrides,
 	};
 }
 
@@ -19,48 +38,35 @@ describe("expenses module", () => {
 		addMember(state, "  Alice  ");
 		addMember(state, "Alice");
 
-		expect(state.members).toEqual(["Alice"]);
+		expect(state.members).toHaveLength(1);
+		expect(state.members[0].name).toBe("Alice");
 	});
 
-	it("removeMember removes payer expenses and removes member from split list", () => {
+	it("addMember stores payment info", () => {
 		const state = makeState();
-		state.members = ["Alice", "Bob", "Charlie"];
+		addMember(state, "Alice", "DuitNow 012");
+		expect(state.members[0].payment).toBe("DuitNow 012");
+	});
+
+	it("removeMember marks payer expenses as deleted and removes member from split", () => {
+		const state = makeState();
+		state.members = [makeMember("Alice"), makeMember("Bob"), makeMember("Charlie")];
 		state.expenses = [
-			{
-				id: "1",
-				desc: "Lunch",
-				amount: 30,
-				paidBy: "Alice",
-				splitAmong: ["Alice", "Bob"],
-				currency: "MYR",
-				addedBy: "Alice",
-				date: "2026-06-11",
-				time: "10:00",
-			},
-			{
-				id: "2",
-				desc: "Snacks",
-				amount: 15,
-				paidBy: "Bob",
-				splitAmong: ["Alice", "Bob", "Charlie"],
-				currency: "MYR",
-				addedBy: "Bob",
-				date: "2026-06-11",
-				time: "11:00",
-			},
+			makeExpense({ id: "1", desc: "Lunch", amount: 30, paidBy: "Alice", splitAmong: ["Alice", "Bob"] }),
+			makeExpense({ id: "2", desc: "Snacks", amount: 15, paidBy: "Bob", splitAmong: ["Alice", "Bob", "Charlie"] }),
 		];
 
 		removeMember(state, "Alice");
 
-		expect(state.members).toEqual(["Bob", "Charlie"]);
-		expect(state.expenses).toHaveLength(1);
-		expect(state.expenses[0].paidBy).toBe("Bob");
-		expect(state.expenses[0].splitAmong).toEqual(["Bob", "Charlie"]);
+		expect(state.members).toHaveLength(2);
+		expect(state.members.map((m) => m.name)).toEqual(["Bob", "Charlie"]);
+		expect(state.expenses[0].deleted).toBe(true);
+		expect(state.expenses[1].splitAmong).toEqual(["Bob", "Charlie"]);
 	});
 
 	it("addExpense rounds amount to 2 decimal places", () => {
 		const state = makeState();
-		state.members = ["Alice", "Bob"];
+		state.members = [makeMember("Alice"), makeMember("Bob")];
 
 		addExpense(state, {
 			desc: "Taxi",
@@ -68,16 +74,17 @@ describe("expenses module", () => {
 			paidBy: "Alice",
 			splitAmong: ["Alice", "Bob"],
 			currency: "MYR",
-			addedBy: "Alice",
 		});
 
 		expect(state.expenses).toHaveLength(1);
 		expect(state.expenses[0].amount).toBe(11);
+		expect(state.expenses[0].createdAt).toBeGreaterThan(0);
+		expect(state.expenses[0].deleted).toBe(false);
 	});
 
 	it("addExpense falls back to all members when splitAmong is empty", () => {
 		const state = makeState();
-		state.members = ["Alice", "Bob"];
+		state.members = [makeMember("Alice"), makeMember("Bob")];
 
 		addExpense(state, {
 			desc: "Shared",
@@ -85,62 +92,33 @@ describe("expenses module", () => {
 			paidBy: "Alice",
 			splitAmong: [],
 			currency: "MYR",
-			addedBy: "Alice",
 		});
 
 		expect(state.expenses[0].splitAmong).toEqual(["Alice", "Bob"]);
 	});
 
-	it("removeExpense filters out expense by id", () => {
+	it("deleteExpense marks expense as deleted", () => {
 		const state = makeState();
 		state.expenses = [
-			{
-				id: "x1",
-				desc: "Food",
-				amount: 10,
-				paidBy: "Alice",
-				splitAmong: ["Alice"],
-				currency: "MYR",
-				addedBy: "Alice",
-				date: "2026-06-11",
-				time: "10:00",
-			},
-			{
-				id: "x2",
-				desc: "Drink",
-				amount: 5,
-				paidBy: "Bob",
-				splitAmong: ["Bob"],
-				currency: "MYR",
-				addedBy: "Bob",
-				date: "2026-06-11",
-				time: "11:00",
-			},
+			makeExpense({ id: "x1", desc: "Food", amount: 10 }),
+			makeExpense({ id: "x2", desc: "Drink", amount: 5 }),
 		];
 
-		removeExpense(state, "x1");
+		deleteExpense(state, "x1");
 
-		expect(state.expenses).toHaveLength(1);
-		expect(state.expenses[0].id).toBe("x2");
+		expect(state.expenses[0].deleted).toBe(true);
+		expect(state.expenses[0].amount).toBe(10);
+		expect(state.expenses[1].deleted).toBe(false);
 	});
 
-	it("calcBalances computes expected payer/debtor balances", () => {
-		const balances = calcBalances(
-			[
-				{
-					id: "e1",
-					desc: "Dinner",
-					amount: 30,
-					paidBy: "Alice",
-					splitAmong: ["Alice", "Bob"],
-					currency: "MYR",
-					addedBy: "Alice",
-					date: "2026-06-11",
-					time: "12:00",
-				},
-			],
-			["Alice", "Bob"],
-		);
+	it("calcBalances computes expected payer/debtor balances and skips deleted", () => {
+		const members = [makeMember("Alice"), makeMember("Bob")];
+		const expenses = [
+			makeExpense({ id: "e1", amount: 30, paidBy: "Alice", splitAmong: ["Alice", "Bob"] }),
+			makeExpense({ id: "e2", amount: 100, paidBy: "Bob", splitAmong: ["Alice", "Bob"], deleted: true }),
+		];
+
+		const balances = calcBalances(expenses, members);
 
 		expect(balances.Alice).toBe(15);
 		expect(balances.Bob).toBe(-15);
@@ -148,54 +126,34 @@ describe("expenses module", () => {
 
 	it("renameMember updates name across members and all expenses", () => {
 		const state = makeState();
-		state.members = ["Alice", "Bob"];
+		state.members = [makeMember("Alice"), makeMember("Bob")];
 		state.expenses = [
-			{
-				id: "1",
-				desc: "Lunch",
-				amount: 30,
-				paidBy: "Alice",
-				splitAmong: ["Alice", "Bob"],
-				currency: "MYR",
-				addedBy: "Alice",
-				date: "2026-06-11",
-				time: "10:00",
-			},
+			makeExpense({ id: "1", paidBy: "Alice", splitAmong: ["Alice", "Bob"] }),
 		];
 
 		renameMember(state, "Alice", "Alicia");
 
-		expect(state.members).toEqual(["Alicia", "Bob"]);
+		expect(state.members[0].name).toBe("Alicia");
 		expect(state.expenses[0].paidBy).toBe("Alicia");
-		expect(state.expenses[0].addedBy).toBe("Alicia");
 		expect(state.expenses[0].splitAmong).toEqual(["Alicia", "Bob"]);
 	});
 
 	it("renameMember does nothing if old name not found", () => {
 		const state = makeState();
-		state.members = ["Alice"];
+		state.members = [makeMember("Alice")];
 
 		renameMember(state, "Ghost", "NewName");
 
-		expect(state.members).toEqual(["Alice"]);
+		expect(state.members[0].name).toBe("Alice");
 	});
 
 	it("simplifyDebts minimizes transfers for three members", () => {
+		const members = [makeMember("Alice"), makeMember("Bob"), makeMember("Charlie")];
 		const expenses = [
-			{
-				id: "e1",
-				desc: "Hotel",
-				amount: 60,
-				paidBy: "Alice",
-				splitAmong: ["Alice", "Bob", "Charlie"],
-				currency: "MYR",
-				addedBy: "Alice",
-				date: "2026-06-11",
-				time: "12:00",
-			},
+			makeExpense({ id: "e1", amount: 60, paidBy: "Alice", splitAmong: ["Alice", "Bob", "Charlie"] }),
 		];
 
-		const debts = simplifyDebts(expenses, ["Alice", "Bob", "Charlie"]);
+		const debts = simplifyDebts(expenses, members);
 
 		expect(debts).toHaveLength(2);
 		expect(debts).toEqual(

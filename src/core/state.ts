@@ -1,5 +1,4 @@
-import { deflateSync, inflateSync, strToU8, strFromU8 } from "fflate";
-import type { Currency, GroupState } from "./types";
+import type { Currency, GroupState, Member } from "./types";
 
 // --- Currencies ---
 
@@ -46,251 +45,137 @@ export function randomGroupName(): string {
 	return GROUP_NAMES[Math.floor(Math.random() * GROUP_NAMES.length)];
 }
 
+// --- Avatars ---
+
+export const AVATAR_OPTIONS: string[] = [
+	"😀", "😎", "🤓", "🥸", "🤡", "🤑", "🤮", "🥴", "🤠", "🥶", "🫠",
+	"👻", "💀", "🤖", "👽", "👹", "🧟", "🧙", "🧛", "🥷", "🦸", "🦹",
+	"🦊", "🐱", "🐶", "🐸", "🦁", "🐯", "🐻", "🐼", "🐨", "🐵", "🦄", "🐲", "🐷", "🐔", "🦧", "🐢", "🦀", "🐙", "🦈", "🐝",
+	"👑", "🎃", "🌚", "💩", "🔥", "💎", "🧠", "👁️", "🍕", "🍜", "☠️", "🛸", "🌶️", "💸",
+];
+
+// --- ID generation ---
+
 function generateId(): string {
 	return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// --- Create empty state ---
+
 export function createEmptyState(name?: string): GroupState {
+	const now = Date.now();
 	return {
 		id: generateId(),
 		name: name || randomGroupName(),
 		members: [],
 		expenses: [],
-		updatedAt: Date.now(),
+		createdAt: now,
+		updatedAt: now,
 	};
 }
 
-// --- URL-safe base64 helpers ---
+// --- localStorage keys ---
 
-function toBase64Url(bytes: Uint8Array): string {
-	let binary = "";
-	for (let i = 0; i < bytes.length; i++) {
-		binary += String.fromCharCode(bytes[i]);
-	}
-	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
+const MY_GROUPS_KEY = "mydigital-ahlong_my_groups";
+const ACTIVE_GROUP_KEY = "mydigital-ahlong_active_group";
+const CACHE_PREFIX = "mydigital-ahlong_cache_";
 
-function fromBase64Url(str: string): Uint8Array {
-	const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-	const binary = atob(base64);
-	const bytes = new Uint8Array(binary.length);
-	for (let i = 0; i < binary.length; i++) {
-		bytes[i] = binary.charCodeAt(i);
-	}
-	return bytes;
-}
+// --- My group IDs ---
 
-// --- URL hash serialization ---
-
-export function encodeState(state: GroupState): string {
-	const json = JSON.stringify(state);
-	const compressed = deflateSync(strToU8(json));
-	return toBase64Url(compressed);
-}
-
-export function decodeState(hash: string): GroupState | null {
-	if (!hash) return null;
+export function getMyGroupIds(): string[] {
 	try {
-		const compressed = fromBase64Url(hash);
-		const json = strFromU8(inflateSync(compressed));
-		return JSON.parse(json) as GroupState;
-	} catch {
-		return null;
-	}
-}
-
-export function saveToHash(state: GroupState): void {
-	const encoded = encodeState(state);
-	window.history.replaceState(null, "", "#" + encoded);
-}
-
-export function loadFromHash(): GroupState | null {
-	const hash = window.location.hash.slice(1);
-	return decodeState(hash);
-}
-
-// --- LocalStorage keys ---
-
-const GROUPS_KEY = "mydigital-ahlong_groups";
-const ACTIVE_KEY = "mydigital-ahlong_active";
-const PAYMENT_KEY = "mydigital-ahlong_payments";
-const AVATARS_KEY = "mydigital-ahlong_avatars";
-
-// --- Avatars ---
-
-export const AVATAR_OPTIONS: string[] = [
-	// Faces
-	"😀",
-	"😎",
-	"🤓",
-	"🥸",
-	"🤡",
-	"🤑",
-	"🤮",
-	"🥴",
-	"🤠",
-	"🥶",
-	"🫠",
-	// Spooky & fantasy
-	"👻",
-	"💀",
-	"🤖",
-	"👽",
-	"👹",
-	"🧟",
-	"🧙",
-	"🧛",
-	"🥷",
-	"🦸",
-	"🦹",
-	// Animals
-	"🦊",
-	"🐱",
-	"🐶",
-	"🐸",
-	"🦁",
-	"🐯",
-	"🐻",
-	"🐼",
-	"🐨",
-	"🐵",
-	"🦄",
-	"🐲",
-	"🐷",
-	"🐔",
-	"🦧",
-	"🐢",
-	"🦀",
-	"🐙",
-	"🦈",
-	"🐝",
-	// Objects & symbols
-	"👑",
-	"🎃",
-	"🌚",
-	"💩",
-	"🔥",
-	"💎",
-	"🧠",
-	"👁️",
-	"🍕",
-	"🍜",
-	"☠️",
-	"🛸",
-	"🌶️",
-	"💸",
-];
-
-export function loadAvatars(): Record<string, string> {
-	try {
-		const raw = localStorage.getItem(AVATARS_KEY);
-		return raw ? JSON.parse(raw) : {};
-	} catch {
-		return {};
-	}
-}
-
-export function saveAvatars(avatars: Record<string, string>): void {
-	localStorage.setItem(AVATARS_KEY, JSON.stringify(avatars));
-}
-
-// --- Payment Methods ---
-
-export function loadPaymentMethods(): Record<string, string> {
-	try {
-		const raw = localStorage.getItem(PAYMENT_KEY);
-		return raw ? JSON.parse(raw) : {};
-	} catch {
-		return {};
-	}
-}
-
-export function savePaymentMethods(methods: Record<string, string>): void {
-	localStorage.setItem(PAYMENT_KEY, JSON.stringify(methods));
-}
-
-// --- Groups ---
-
-export function loadGroups(): GroupState[] {
-	try {
-		const raw = localStorage.getItem(GROUPS_KEY);
-		const groups: GroupState[] = raw ? JSON.parse(raw) : [];
-		let migrated = false;
-		for (const g of groups) {
-			if (!g.id) {
-				g.id = generateId();
-				migrated = true;
-			}
-			if (!g.updatedAt) {
-				g.updatedAt = Date.now();
-				migrated = true;
-			}
-		}
-		if (migrated) saveGroups(groups);
-		return groups;
+		const raw = localStorage.getItem(MY_GROUPS_KEY);
+		return raw ? JSON.parse(raw) : [];
 	} catch {
 		return [];
 	}
 }
 
-export function saveGroups(groups: GroupState[]): void {
-	localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+export function addMyGroupId(id: string): void {
+	const ids = getMyGroupIds();
+	if (!ids.includes(id)) {
+		ids.push(id);
+		localStorage.setItem(MY_GROUPS_KEY, JSON.stringify(ids));
+	}
 }
 
-export function getActiveIndex(): number {
-	const idx = parseInt(localStorage.getItem(ACTIVE_KEY) || "", 10);
-	return isNaN(idx) ? 0 : idx;
+export function removeMyGroupId(id: string): void {
+	const ids = getMyGroupIds().filter((gid) => gid !== id);
+	localStorage.setItem(MY_GROUPS_KEY, JSON.stringify(ids));
 }
 
-export function setActiveIndex(idx: number): void {
-	localStorage.setItem(ACTIVE_KEY, String(idx));
+// --- Active group ---
+
+export function getActiveGroupId(): string | null {
+	return localStorage.getItem(ACTIVE_GROUP_KEY) || null;
 }
 
-// --- State loading ---
+export function setActiveGroupId(id: string): void {
+	localStorage.setItem(ACTIVE_GROUP_KEY, id);
+}
 
-/** Set to true when a group was just imported from a shared link */
-export let groupJustImported = false;
+// --- Group cache (offline fallback) ---
 
-export function loadState(): GroupState {
-	groupJustImported = false;
-	const fromHash = loadFromHash();
-	if (fromHash) {
-		if (!fromHash.id) fromHash.id = generateId();
-		if (!fromHash.updatedAt) fromHash.updatedAt = Date.now();
+export function cacheGroup(state: GroupState): void {
+	localStorage.setItem(CACHE_PREFIX + state.id, JSON.stringify(state));
+}
 
-		const groups = loadGroups();
-		const activeIdx = Math.min(getActiveIndex(), groups.length - 1);
+export function getCachedGroup(id: string): GroupState | null {
+	try {
+		const raw = localStorage.getItem(CACHE_PREFIX + id);
+		return raw ? JSON.parse(raw) : null;
+	} catch {
+		return null;
+	}
+}
 
-		// Check if hash matches the currently active group (just a refresh)
-		if (groups.length && groups[activeIdx]?.id === fromHash.id && JSON.stringify(groups[activeIdx]) === JSON.stringify(fromHash)) {
-			return fromHash;
+export function removeCachedGroup(id: string): void {
+	localStorage.removeItem(CACHE_PREFIX + id);
+}
+
+// --- Merge logic ---
+
+export function mergeGroupStates(local: GroupState, remote: GroupState): GroupState {
+	// Merge members by name
+	const memberMap = new Map<string, Member>();
+	for (const m of local.members) {
+		memberMap.set(m.name, { ...m });
+	}
+	for (const m of remote.members) {
+		const existing = memberMap.get(m.name);
+		if (existing) {
+			if (remote.updatedAt >= (local.updatedAt || 0)) {
+				memberMap.set(m.name, { ...m });
+			}
+		} else {
+			memberMap.set(m.name, { ...m });
 		}
-
-		// Check if group with same id exists — update it with shared data
-		const idIdx = groups.findIndex((g) => g.id === fromHash.id);
-		if (idIdx !== -1) {
-			groups[idIdx] = fromHash;
-			saveGroups(groups);
-			setActiveIndex(idIdx);
-			window.history.replaceState(null, "", window.location.pathname);
-			return fromHash;
-		}
-
-		// Import as new group (shared link)
-		groups.push(fromHash);
-		saveGroups(groups);
-		setActiveIndex(groups.length - 1);
-		window.history.replaceState(null, "", window.location.pathname);
-		groupJustImported = true;
-		return fromHash;
 	}
 
-	const groups = loadGroups();
-	if (!groups.length) {
-		return createEmptyState();
+	// Merge expenses by ID
+	const localExpenseMap = new Map(local.expenses.map((e) => [e.id, e]));
+	const remoteExpenseMap = new Map(remote.expenses.map((e) => [e.id, e]));
+
+	const mergedExpenses = local.expenses.map((e) => {
+		const remoteVersion = remoteExpenseMap.get(e.id);
+		if (remoteVersion && remoteVersion.createdAt >= e.createdAt) {
+			return remoteVersion;
+		}
+		return e;
+	});
+
+	for (const e of remote.expenses) {
+		if (!localExpenseMap.has(e.id)) {
+			mergedExpenses.push(e);
+		}
 	}
 
-	const idx = Math.min(getActiveIndex(), groups.length - 1);
-	return groups[idx];
+	return {
+		id: local.id,
+		name: remote.updatedAt >= (local.updatedAt || 0) ? remote.name : local.name,
+		members: [...memberMap.values()],
+		expenses: mergedExpenses,
+		createdAt: Math.min(local.createdAt || Date.now(), remote.createdAt || Date.now()),
+		updatedAt: Math.max(remote.updatedAt || 0, local.updatedAt || 0),
+	};
 }
-
