@@ -4,9 +4,11 @@ export interface Currency {
 }
 
 export interface Member {
+	id: string;
 	name: string;
 	payment: string;
 	avatar: string;
+	updatedAt: number;
 }
 
 export type SplitType = 'equal' | 'exact' | 'percent';

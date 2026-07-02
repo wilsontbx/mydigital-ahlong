@@ -78,7 +78,7 @@ describe("dialogs", () => {
 	});
 
 	it("showMemberMenu remove payment calls onPaymentChange with empty", () => {
-		const state = makeState([{ name: "Alice", payment: "PayNow", avatar: "😎" }]);
+		const state = makeState([{ id: "test-1", name: "Alice", payment: "PayNow", avatar: "😎", updatedAt: 0 }]);
 		const onPaymentChange = vi.fn();
 		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange, onRemove: vi.fn(), onRename: vi.fn() });
 
@@ -87,7 +87,7 @@ describe("dialogs", () => {
 	});
 
 	it("showMemberMenu remove member calls onRemove", () => {
-		const state = makeState([{ name: "Alice", payment: "PayNow", avatar: "😀" }]);
+		const state = makeState([{ id: "test-1", name: "Alice", payment: "PayNow", avatar: "😀", updatedAt: 0 }]);
 		const onRemove = vi.fn();
 		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove, onRename: vi.fn() });
 
@@ -97,7 +97,7 @@ describe("dialogs", () => {
 	});
 
 	it("showMemberMenu payment edit calls onPaymentChange", () => {
-		const state = makeState([{ name: "Alice", payment: "PayNow", avatar: "😀" }]);
+		const state = makeState([{ id: "test-1", name: "Alice", payment: "PayNow", avatar: "😀", updatedAt: 0 }]);
 		const onPaymentChange = vi.fn();
 		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange, onRemove: vi.fn(), onRename: vi.fn() });
 
@@ -110,14 +110,14 @@ describe("dialogs", () => {
 	});
 
 	it("showMemberMenu avatar button opens avatar picker", () => {
-		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
+		const state = makeState([{ id: "test-1", name: "Alice", payment: "", avatar: "😀", updatedAt: 0 }]);
 		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename: vi.fn() });
 		(document.querySelector(".dialog-btn-avatar") as HTMLButtonElement).click();
 		expect(document.querySelector(".avatar-grid")).toBeTruthy();
 	});
 
 	it("showMemberMenu avatar picker calls onAvatarChange", () => {
-		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
+		const state = makeState([{ id: "test-1", name: "Alice", payment: "", avatar: "😀", updatedAt: 0 }]);
 		const onAvatarChange = vi.fn();
 		showMemberMenu(state, "Alice", { onAvatarChange, onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename: vi.fn() });
 		(document.querySelector(".dialog-btn-avatar") as HTMLButtonElement).click();
@@ -127,7 +127,7 @@ describe("dialogs", () => {
 	});
 
 	it("showMemberMenu rename triggers onRename callback", () => {
-		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
+		const state = makeState([{ id: "test-1", name: "Alice", payment: "", avatar: "😀", updatedAt: 0 }]);
 		const onRename = vi.fn();
 		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename });
 
@@ -140,7 +140,7 @@ describe("dialogs", () => {
 	});
 
 	it("showMemberMenu close button hides modal", () => {
-		const state = makeState([{ name: "Alice", payment: "", avatar: "😀" }]);
+		const state = makeState([{ id: "test-1", name: "Alice", payment: "", avatar: "😀", updatedAt: 0 }]);
 		showMemberMenu(state, "Alice", { onAvatarChange: vi.fn(), onPaymentChange: vi.fn(), onRemove: vi.fn(), onRename: vi.fn() });
 		(document.querySelector(".dialog-btn-cancel") as HTMLButtonElement).click();
 		expect((document.querySelector("#dialog-modal") as HTMLElement).hidden).toBe(true);

@@ -8,6 +8,7 @@ import {
 	addMyGroupId,
 	removeMyGroupId,
 	setActiveGroupId,
+	clearActiveGroupId,
 	cacheGroup,
 	getCachedGroup,
 	removeCachedGroup,
@@ -184,6 +185,7 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 
 				const remainingIds = getMyGroupIds();
 				if (!remainingIds.length) {
+					clearActiveGroupId();
 					setState(createEmptyState());
 					renderLanding();
 					return;
@@ -220,26 +222,34 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 	$("#members-list").addEventListener("click", (e) => {
 		const tag = (e.target as HTMLElement).closest("[data-member]") as HTMLElement | null;
 		if (!tag) return;
-		const name = tag.dataset.member!;
-		showMemberMenu(getState(), name, {
+		const memberId = tag.dataset.member!;
+		const member = getState().members.find((m) => m.id === memberId);
+		if (!member) return;
+		showMemberMenu(getState(), member.name, {
 			onAvatarChange: (avatar) => {
-				const member = getState().members.find((m) => m.name === name);
-				if (member) member.avatar = avatar;
+				const m = getState().members.find((m) => m.id === memberId);
+				if (m) {
+					m.avatar = avatar;
+					m.updatedAt = Date.now();
+				}
 				rerender();
 			},
 			onPaymentChange: (payment) => {
-				const member = getState().members.find((m) => m.name === name);
-				if (member) member.payment = payment;
+				const m = getState().members.find((m) => m.id === memberId);
+				if (m) {
+					m.payment = payment;
+					m.updatedAt = Date.now();
+				}
 				rerender();
 			},
 			onRemove: () => {
-				removeMember(getState(), name);
+				removeMember(getState(), memberId);
 				rerender();
 			},
 			onRename: (newName) => {
-				renameMember(getState(), name, newName);
+				renameMember(getState(), memberId, newName);
 				rerender();
-				showToast(`✏️ Renamed "${name}" → "${newName}"`);
+				showToast(`✏️ Renamed "${member.name}" → "${newName}"`);
 			},
 		});
 	});
@@ -331,13 +341,17 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 			splitValuesEl.hidden = false;
 			splitValuesEl.innerHTML = checked
 				.map(
-					(name) => `
+					(memberId) => {
+						const member = getState().members.find((m) => m.id === memberId);
+						const displayName = member?.name || "???";
+						return `
 				<div class="split-value-row">
-					<span class="split-value-name">${name}</span>
+					<span class="split-value-name">${displayName}</span>
 					${!isPercent ? `<span class="split-value-prefix">${sym}</span>` : ""}
-					<input type="number" step="0.01" min="0" class="split-value-input" data-split-member="${name}" placeholder="0" value="${existing[name] || ""}" />
-					${isPercent ? `<span class="split-value-suffix">%</span><span class="split-value-calc" data-calc-member="${name}"></span>` : ""}
-				</div>`,
+					<input type="number" step="0.01" min="0" class="split-value-input" data-split-member="${memberId}" placeholder="0" value="${existing[memberId] || ""}" />
+					${isPercent ? `<span class="split-value-suffix">%</span><span class="split-value-calc" data-calc-member="${memberId}"></span>` : ""}
+				</div>`;
+					},
 				)
 				.join("") + `<div class="split-value-total"><span class="split-value-total-label">Total:</span><span class="split-value-total-amount">0${isPercent ? "%" : ` ${sym}`}</span></div>`;
 			updateSplitTotals();
@@ -626,16 +640,18 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 		const settleBtn = (e.target as HTMLElement).closest("[data-settle-from]") as HTMLElement | null;
 		if (!settleBtn) return;
 		e.stopPropagation();
-		const from = settleBtn.dataset.settleFrom!;
-		const to = settleBtn.dataset.settleTo!;
+		const fromId = settleBtn.dataset.settleFrom!;
+		const toId = settleBtn.dataset.settleTo!;
 		const currency = settleBtn.dataset.settleCurrency!;
 		const amount = parseFloat(settleBtn.dataset.settleAmount!);
-		const pm = getPayment(getState(), to);
+		const pm = getPayment(getState(), toId);
 		const sym = getSymbol(currency);
+		const fromName = getState().members.find((m) => m.id === fromId)?.name || "???";
+		const toName = getState().members.find((m) => m.id === toId)?.name || "???";
 
 		showDialog({
 			type: "prompt",
-			title: `${from} → ${to}${pm ? `\n💳 Pay via: ${pm}` : ""}\nHow much to settle?`,
+			title: `${fromName} → ${toName}${pm ? `\n💳 Pay via: ${pm}` : ""}\nHow much to settle?`,
 			defaultValue: amount.toFixed(2),
 			onConfirm: (val) => {
 				const settleAmount = parseFloat(val || "0");
@@ -649,15 +665,15 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 				}
 				addExpense(getState(), {
 					type: "settlement",
-					desc: `💸 Settlement: ${from} → ${to}`,
+					desc: `💸 Settlement: ${fromName} → ${toName}`,
 					amount: Math.round(settleAmount * 100) / 100,
-					paidBy: from,
-					splitAmong: [to],
+					paidBy: fromId,
+					splitAmong: [toId],
 					currency,
 				});
 				rerender();
 				const isPartial = settleAmount < amount - 0.01;
-				showToast(isPartial ? `⏳ Partial: ${sym}${settleAmount.toFixed(2)} of ${sym}${amount.toFixed(2)}` : `✅ ${from} settled with ${to}!`);
+				showToast(isPartial ? `⏳ Partial: ${sym}${settleAmount.toFixed(2)} of ${sym}${amount.toFixed(2)}` : `✅ ${fromName} settled with ${toName}!`);
 			},
 		});
 	});
@@ -795,7 +811,7 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 	}
 }
 
-function getPayment(state: GroupState, name: string): string {
-	const member = state.members.find((m) => m.name === name);
+function getPayment(state: GroupState, id: string): string {
+	const member = state.members.find((m) => m.id === id);
 	return member?.payment || "";
 }

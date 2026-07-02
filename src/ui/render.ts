@@ -11,13 +11,18 @@ function getSymbol(code: string): string {
 	return c ? c.symbol : code;
 }
 
-function getAvatar(state: GroupState, name: string): string {
-	const member = state.members.find((m) => m.name === name);
+function getMemberName(state: GroupState, id: string): string {
+	const member = state.members.find((m) => m.id === id);
+	return member?.name || "???";
+}
+
+function getAvatar(state: GroupState, id: string): string {
+	const member = state.members.find((m) => m.id === id);
 	return member?.avatar || "😀";
 }
 
-function getPayment(state: GroupState, name: string): string {
-	const member = state.members.find((m) => m.name === name);
+function getPayment(state: GroupState, id: string): string {
+	const member = state.members.find((m) => m.id === id);
 	return member?.payment || "";
 }
 
@@ -94,7 +99,7 @@ export function renderMembers(state: GroupState): void {
 	list.innerHTML = state.members
 		.map(
 			(m) => `
-    <span class="member-tag" data-member="${esc(m.name)}">
+    <span class="member-tag" data-member="${esc(m.id)}">
       <span class="member-avatar">${m.avatar}</span> ${esc(m.name)} ${m.payment ? "💳" : ""}
     </span>
   `,
@@ -112,7 +117,7 @@ export function renderExpenseForm(state: GroupState): void {
 			.map(
 				(m) => `
     <label class="split-label checked">
-      <input type="checkbox" value="${esc(m.name)}" checked>
+      <input type="checkbox" value="${esc(m.id)}" checked>
       <span class="split-avatar">${m.avatar}</span>
       <span class="split-name">${esc(m.name)}</span>
     </label>
@@ -121,7 +126,7 @@ export function renderExpenseForm(state: GroupState): void {
 			.join("");
 
 	const select = $("#paid-by");
-	select.innerHTML = state.members.map((m) => `<option value="${esc(m.name)}">${esc(m.name)}</option>`).join("");
+	select.innerHTML = state.members.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
 
 	const currSel = $("#expense-currency");
 	currSel.innerHTML = getOrderedCurrencies()
@@ -210,7 +215,6 @@ export function renderExpenses(state: GroupState): void {
 	}
 
 	// Track settlements: accumulate how much each person has settled to another per currency
-	// Only count settlements that came AFTER an expense to determine that expense's status
 	const settlementsByTime: { from: string; to: string; currency: string; amount: number; createdAt: number }[] = [];
 	for (const exp of activeExpenses) {
 		if (exp.type !== "settlement") continue;
@@ -226,7 +230,7 @@ export function renderExpenses(state: GroupState): void {
 			const cur = e.currency || "MYR";
 
 			// Calculate per-member owed amounts and how much they've settled AFTER this expense
-			const memberOwed: { name: string; owed: number; paid: number }[] = [];
+			const memberOwed: { id: string; owed: number; paid: number }[] = [];
 			for (const s of e.splitAmong) {
 				if (s === e.paidBy) continue;
 				let owed = 0;
@@ -237,11 +241,10 @@ export function renderExpenses(state: GroupState): void {
 				} else if (splitType === "percent" && e.splitValues) {
 					owed = (e.amount * (e.splitValues[s] || 0)) / 100;
 				}
-				// Sum settlements from this person to payer, same currency, created after this expense
 				const paid = settlementsByTime
 					.filter((st) => st.from === s && st.to === e.paidBy && st.currency === cur && st.createdAt >= e.createdAt)
 					.reduce((sum, st) => sum + st.amount, 0);
-				memberOwed.push({ name: s, owed, paid: Math.min(paid, owed) });
+				memberOwed.push({ id: s, owed, paid: Math.min(paid, owed) });
 			}
 			const totalOwed = memberOwed.reduce((sum, m) => sum + m.owed, 0);
 			const totalPaid = memberOwed.reduce((sum, m) => sum + m.paid, 0);
@@ -254,7 +257,7 @@ export function renderExpenses(state: GroupState): void {
 				const statusClass = isFullySettled ? "settle-full" : isPartial ? "settle-partial" : "settle-pending";
 				const statusLabel = isFullySettled ? "✅ Settled" : isPartial ? `⏳ ${sym}${totalPaid.toFixed(2)} / ${sym}${totalOwed.toFixed(2)}` : `💤 ${sym}${totalOwed.toFixed(2)} owed`;
 				const unpaid = memberOwed.filter((m) => m.paid < m.owed - 0.01);
-				const unpaidText = unpaid.length && !isFullySettled ? ` · ${unpaid.map((m) => `${getAvatar(state, m.name)} ${esc(m.name)}`).join(", ")} unpaid` : "";
+				const unpaidText = unpaid.length && !isFullySettled ? ` · ${unpaid.map((m) => `${getAvatar(state, m.id)} ${esc(getMemberName(state, m.id))}`).join(", ")} unpaid` : "";
 				statusHtml = `<div class="expense-settle-status ${statusClass}">
 					<div class="settle-bar"><div class="settle-bar-fill" style="width:${pct.toFixed(0)}%"></div></div>
 					<span class="settle-label">${statusLabel}${unpaidText}</span>
@@ -265,21 +268,21 @@ export function renderExpenses(state: GroupState): void {
 			if (splitType === "equal") {
 				const share = e.amount / e.splitAmong.length;
 				splitDetails = e.splitAmong.map((s) => {
-					const m = memberOwed.find((x) => x.name === s);
+					const m = memberOwed.find((x) => x.id === s);
 					const paidTag = m ? (m.paid >= m.owed - 0.01 ? " ✅" : m.paid > 0 ? ` (paid ${sym}${m.paid.toFixed(2)})` : "") : "";
-					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(s)}: <b>${sym}${share.toFixed(2)}</b>${paidTag}</span>`;
+					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(getMemberName(state, s))}: <b>${sym}${share.toFixed(2)}</b>${paidTag}</span>`;
 				});
 			} else if (splitType === "exact" && e.splitValues) {
 				splitDetails = e.splitAmong.map((s) => {
-					const m = memberOwed.find((x) => x.name === s);
+					const m = memberOwed.find((x) => x.id === s);
 					const paidTag = m ? (m.paid >= m.owed - 0.01 ? " ✅" : m.paid > 0 ? ` (paid ${sym}${m.paid.toFixed(2)})` : "") : "";
-					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(s)}: <b>${sym}${(e.splitValues![s] || 0).toFixed(2)}</b>${paidTag}</span>`;
+					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(getMemberName(state, s))}: <b>${sym}${(e.splitValues![s] || 0).toFixed(2)}</b>${paidTag}</span>`;
 				});
 			} else if (splitType === "percent" && e.splitValues) {
 				splitDetails = e.splitAmong.map((s) => {
-					const m = memberOwed.find((x) => x.name === s);
+					const m = memberOwed.find((x) => x.id === s);
 					const paidTag = m ? (m.paid >= m.owed - 0.01 ? " ✅" : m.paid > 0 ? ` (paid ${sym}${m.paid.toFixed(2)})` : "") : "";
-					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(s)}: <b>${(e.splitValues![s] || 0).toFixed(1)}%</b> (${sym}${((e.amount * (e.splitValues![s] || 0)) / 100).toFixed(2)})${paidTag}</span>`;
+					return `<span class="split-detail-item">${getAvatar(state, s)} ${esc(getMemberName(state, s))}: <b>${(e.splitValues![s] || 0).toFixed(1)}%</b> (${sym}${((e.amount * (e.splitValues![s] || 0)) / 100).toFixed(2)})${paidTag}</span>`;
 				});
 			}
 			const badgeClass = splitType === "equal" ? "split-type-badge split-type-equal" : "split-type-badge";
@@ -291,7 +294,7 @@ export function renderExpenses(state: GroupState): void {
         <span class="expense-amount">${sym}${e.amount.toFixed(2)}</span>
       </div>
       <div class="expense-meta">
-        Paid by ${getAvatar(state, e.paidBy)} <b>${esc(e.paidBy)}</b> · <span class="${badgeClass}" data-split-toggle>${splitType}</span> among ${e.splitAmong.map((s) => `${getAvatar(state, s)}`).join(" ")}
+        Paid by ${getAvatar(state, e.paidBy)} <b>${esc(getMemberName(state, e.paidBy))}</b> · <span class="${badgeClass}" data-split-toggle>${splitType}</span> among ${e.splitAmong.map((s) => `${getAvatar(state, s)}`).join(" ")}
         <span class="expense-date">${displayDate}</span>
       </div>
       ${statusHtml}
@@ -357,7 +360,7 @@ export function renderSettlement(state: GroupState): void {
 				return `
       <div class="debt-item" data-debt-from="${esc(d.from)}" data-debt-to="${esc(d.to)}" data-debt-amount="${sym}${d.amount.toFixed(2)}" data-debt-currency="${currency}" data-debt-raw="${d.amount.toFixed(2)}">
         <div class="debt-info">
-          <span class="debt-text">${getAvatar(state, d.from)} <b>${esc(d.from)}</b> owes ${getAvatar(state, d.to)} <b>${esc(d.to)}</b></span>
+          <span class="debt-text">${getAvatar(state, d.from)} <b>${esc(getMemberName(state, d.from))}</b> owes ${getAvatar(state, d.to)} <b>${esc(getMemberName(state, d.to))}</b></span>
           ${pm ? `<span class="debt-payment">💳 ${esc(pm)}</span>` : ""}
         </div>
         <div class="debt-actions">
@@ -409,7 +412,7 @@ export function renderTxnLog(state: GroupState): void {
 			<span class="txn-icon">${icon}</span>
 			<div class="txn-details">
 				<span class="txn-desc">${esc(e.desc)}</span>
-				<span class="txn-meta">${getAvatar(state, e.paidBy)} ${esc(e.paidBy)} · ${formatDate(e.createdAt)}</span>
+				<span class="txn-meta">${getAvatar(state, e.paidBy)} ${esc(getMemberName(state, e.paidBy))} · ${formatDate(e.createdAt)}</span>
 			</div>
 			<span class="txn-amount ${e.isSettlement ? "txn-amount-settle" : ""}">${sym}${e.amount.toFixed(2)}</span>
 		</div>`;

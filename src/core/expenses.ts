@@ -20,7 +20,7 @@ interface AddExpenseParams {
 
 export function addExpense(state: GroupState, params: AddExpenseParams): GroupState {
 	const now = Date.now();
-	const splitAmong = params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.name);
+	const splitAmong = params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.id);
 	const expense: Expense = {
 		id: genId(),
 		type: params.type || "expense",
@@ -47,7 +47,7 @@ export function editExpense(state: GroupState, id: string, params: Partial<AddEx
 	if (params.desc !== undefined) expense.desc = params.desc;
 	if (params.amount !== undefined) expense.amount = Math.round(params.amount * 100) / 100;
 	if (params.paidBy !== undefined) expense.paidBy = params.paidBy;
-	if (params.splitAmong !== undefined) expense.splitAmong = params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.name);
+	if (params.splitAmong !== undefined) expense.splitAmong = params.splitAmong.length ? params.splitAmong : state.members.map((m) => m.id);
 	if (params.splitType !== undefined) expense.splitType = params.splitType;
 	if (params.splitValues !== undefined) expense.splitValues = params.splitValues;
 	if (params.currency !== undefined) expense.currency = params.currency;
@@ -59,37 +59,44 @@ export function editExpense(state: GroupState, id: string, params: Partial<AddEx
 
 export function deleteExpense(state: GroupState, id: string): GroupState {
 	const expense = state.expenses.find((e) => e.id === id);
-	if (expense) expense.deleted = true;
+	if (expense) {
+		expense.deleted = true;
+		expense.updatedAt = Date.now();
+	}
 	return state;
 }
 
 export function addMember(state: GroupState, name: string, payment = ""): GroupState {
 	const trimmed = name.trim();
 	if (trimmed && !state.members.some((m) => m.name === trimmed)) {
-		const member: Member = { name: trimmed, payment, avatar: "😀" };
+		const member: Member = { id: genId(), name: trimmed, payment, avatar: "😀", updatedAt: Date.now() };
 		state.members.push(member);
 	}
 	return state;
 }
 
-export function removeMember(state: GroupState, name: string): GroupState {
-	state.members = state.members.filter((m) => m.name !== name);
+export function removeMember(state: GroupState, memberId: string): GroupState {
+	state.members = state.members.filter((m) => m.id !== memberId);
+	const now = Date.now();
 	for (const e of state.expenses) {
-		if (e.paidBy === name) e.deleted = true;
-		e.splitAmong = e.splitAmong.filter((m) => m !== name);
-		if (e.splitAmong.length === 0 && !e.deleted) e.deleted = true;
+		if (e.paidBy === memberId) {
+			e.deleted = true;
+			e.updatedAt = now;
+		}
+		e.splitAmong = e.splitAmong.filter((m) => m !== memberId);
+		if (e.splitAmong.length === 0 && !e.deleted) {
+			e.deleted = true;
+			e.updatedAt = now;
+		}
 	}
 	return state;
 }
 
-export function renameMember(state: GroupState, oldName: string, newName: string): GroupState {
-	const member = state.members.find((m) => m.name === oldName);
+export function renameMember(state: GroupState, memberId: string, newName: string): GroupState {
+	const member = state.members.find((m) => m.id === memberId);
 	if (!member) return state;
 	member.name = newName;
-	for (const e of state.expenses) {
-		if (e.paidBy === oldName) e.paidBy = newName;
-		e.splitAmong = e.splitAmong.map((m) => (m === oldName ? newName : m));
-	}
+	member.updatedAt = Date.now();
 	return state;
 }
 
@@ -97,7 +104,7 @@ export function renameMember(state: GroupState, oldName: string, newName: string
 
 export function calcBalances(expenses: Expense[], members: Member[]): Record<string, number> {
 	const balances: Record<string, number> = {};
-	for (const m of members) balances[m.name] = 0;
+	for (const m of members) balances[m.id] = 0;
 
 	for (const exp of expenses) {
 		if (exp.deleted) continue;
@@ -127,14 +134,14 @@ export function calcBalances(expenses: Expense[], members: Member[]): Record<str
 // --- Simplify debts (min transactions) ---
 
 export function simplifyDebts(expenses: Expense[], members: Member[]): Debt[] {
-	const memberNames = members.map((m) => m.name);
+	const memberIds = members.map((m) => m.id);
 	const balances = calcBalances(expenses, members);
 	const debts: Debt[] = [];
 
 	const creditors: { person: string; amount: number }[] = [];
 	const debtors: { person: string; amount: number }[] = [];
 
-	for (const person of memberNames) {
+	for (const person of memberIds) {
 		const rounded = Math.round((balances[person] || 0) * 100) / 100;
 		if (rounded > 0.01) creditors.push({ person, amount: rounded });
 		else if (rounded < -0.01) debtors.push({ person, amount: -rounded });

@@ -48,21 +48,6 @@ export async function fetchGroup(groupId: string): Promise<GroupState | null> {
 		const snapshot = await get(ref(getDb(), `groups/${groupId}`));
 		const data = snapshot.val();
 		if (!isValidGroup(data)) return null;
-		// Strip legacy fields from old data
-		const raw = data as unknown as Record<string, unknown>;
-		delete raw["payments"];
-		delete raw["avatars"];
-		data.createdAt = data.createdAt || 0;
-		data.updatedAt = data.updatedAt || 0;
-		for (const e of data.expenses) {
-			e.createdAt = e.createdAt || 0;
-			e.deleted = e.deleted || false;
-		}
-		for (const m of data.members) {
-			if (typeof m === "string") continue;
-			m.payment = m.payment || "";
-			m.avatar = m.avatar || "😀";
-		}
 		return data;
 	} catch {
 		return null;
@@ -108,17 +93,6 @@ export function listenToGroup(groupId: string, onUpdate: (state: GroupState) => 
 	onValue(activeRef, (snapshot) => {
 		const data = snapshot.val();
 		if (isValidGroup(data)) {
-			data.createdAt = data.createdAt || 0;
-			data.updatedAt = data.updatedAt || 0;
-			for (const e of data.expenses) {
-				e.createdAt = e.createdAt || 0;
-				e.deleted = e.deleted || false;
-			}
-			for (const m of data.members) {
-				if (typeof m === "string") continue;
-				m.payment = m.payment || "";
-				m.avatar = m.avatar || "😀";
-			}
 			onUpdate(data);
 		}
 	});

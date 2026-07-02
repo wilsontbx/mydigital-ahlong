@@ -84,16 +84,16 @@ function setupDom() {
 		<h2 id="group-name"></h2>
 		<button id="delete-group-btn"></button>
 		<form id="add-member-form"><input id="member-input" /><input id="member-payment" /></form>
-		<div id="members-list"><span data-member="Alice">Alice</span></div>
+		<div id="members-list"><span data-member="test-1">Alice</span></div>
 		<form id="add-expense-form">
 			<input id="expense-desc" />
 			<input id="expense-amount" />
 			<select id="expense-category"><option value="">no category</option></select>
 			<input id="expense-date" type="date" />
-			<select id="paid-by"><option value="Alice">Alice</option></select>
+			<select id="paid-by"><option value="test-1">Alice</option></select>
 			<select id="expense-currency"><option value="MYR">MYR</option></select>
 			<select id="split-type"><option value="equal">Equal</option><option value="exact">Exact</option><option value="percent">Percent</option></select>
-			<div id="split-checkboxes"><input type="checkbox" value="Alice" checked /></div>
+			<div id="split-checkboxes"><input type="checkbox" value="test-1" checked /></div>
 			<div id="split-values" hidden></div>
 		</form>
 		<select id="filter-category"><option value="">All</option></select>
@@ -118,15 +118,15 @@ function makeState(): GroupState {
 	return {
 		id: "test-id",
 		name: "Trip",
-		members: [{ name: "Alice", payment: "DuitNow", avatar: "😀" }, { name: "Bob", payment: "", avatar: "😎" }],
+		members: [{ id: "test-1", name: "Alice", payment: "DuitNow", avatar: "😀", updatedAt: 0 }, { id: "test-2", name: "Bob", payment: "", avatar: "😎", updatedAt: 0 }],
 		expenses: [
 			{
 				id: "e1",
 				type: "expense",
 				desc: "Lunch",
 				amount: 30,
-				paidBy: "Alice",
-				splitAmong: ["Alice", "Bob"],
+				paidBy: "test-1",
+				splitAmong: ["test-1", "test-2"],
 				splitType: "equal",
 				currency: "MYR",
 				date: 1000,

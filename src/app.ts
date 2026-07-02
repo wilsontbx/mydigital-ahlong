@@ -14,7 +14,7 @@ import { setupEvents } from "./ui/events";
 import { setupInstallPrompt } from "./ui/install";
 import { showToast } from "./shared/utils";
 import { isFirebaseEnabled, fetchGroup } from "./core/firebase";
-import { initSync, commit, subscribeToGroup, setLocalUpdatedAt, importGroup } from "./core/sync";
+import { initSync, subscribeToGroup, setLocalUpdatedAt, importGroup, flushPendingWrites } from "./core/sync";
 
 // --- Theme ---
 const THEME_KEY = "mydigital-ahlong_theme";
@@ -63,7 +63,6 @@ initSync((updated) => {
 
 // --- Bootstrap ---
 async function boot() {
-	// Check for ?group=ID in URL
 	const params = new URLSearchParams(window.location.search);
 	const incomingGroupId = params.get("group");
 
@@ -72,7 +71,7 @@ async function boot() {
 		const result = await importGroup(incomingGroupId);
 		if (result) {
 			state = result.state;
-			setLocalUpdatedAt(state.updatedAt || 0);
+			setLocalUpdatedAt(state.updatedAt || 0, state.id);
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -81,13 +80,12 @@ async function boot() {
 		showToast("Couldn't load group — check your connection 💀");
 	}
 
-	// Try to load active group
 	const activeId = getActiveGroupId();
 	if (activeId) {
 		const loaded = await loadGroup(activeId);
 		if (loaded) {
 			state = loaded;
-			setLocalUpdatedAt(state.updatedAt || 0);
+			setLocalUpdatedAt(state.updatedAt || 0, state.id);
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -95,7 +93,6 @@ async function boot() {
 		}
 	}
 
-	// Try first group in list
 	const myIds = getMyGroupIds();
 	if (myIds.length) {
 		const firstId = myIds[0];
@@ -103,7 +100,7 @@ async function boot() {
 		const loaded = await loadGroup(firstId);
 		if (loaded) {
 			state = loaded;
-			setLocalUpdatedAt(state.updatedAt || 0);
+			setLocalUpdatedAt(state.updatedAt || 0, state.id);
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -111,7 +108,6 @@ async function boot() {
 		}
 	}
 
-	// No groups — show landing
 	renderLanding();
 	setupUI();
 }
@@ -160,74 +156,15 @@ function setupUI() {
 	}
 }
 
-// --- Migration: push old localStorage data to Firebase ---
-async function migrate() {
-	const oldGroupsRaw = localStorage.getItem("mydigital-ahlong_groups");
-	if (!oldGroupsRaw) return;
-
-	try {
-		const oldGroups = JSON.parse(oldGroupsRaw) as Array<{ id?: string; name: string; members: string[]; expenses: Array<Record<string, unknown>>; updatedAt?: number }>;
-		const oldPayments: Record<string, string> = JSON.parse(localStorage.getItem("mydigital-ahlong_payments") || "{}");
-		const oldAvatars: Record<string, string> = JSON.parse(localStorage.getItem("mydigital-ahlong_avatars") || "{}");
-		const oldActiveIdx = parseInt(localStorage.getItem("mydigital-ahlong_active") || "0", 10);
-
-		for (const og of oldGroups) {
-			const id = og.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
-			const members = (og.members || []).map((name: string) => ({
-				name,
-				payment: oldPayments[name] || "",
-				avatar: oldAvatars[name] || "😀",
-			}));
-
-			const expenses = (og.expenses || []).map((e: Record<string, unknown>) => {
-				const amount = e.amount as number || 0;
-				const originalAmount = e.originalAmount as number | undefined;
-				const isDeleted = amount === 0 && !!originalAmount;
-				const createdAt = e.createdAt as number || Date.parse(`${e.date}T${e.time || "00:00"}`) || Date.now();
-				return {
-					id: (e.id as string) || Date.now().toString(36),
-					type: "expense" as const,
-					desc: ((e.desc as string) || "").replace(/^❌ Deleted: /, ""),
-					amount: isDeleted ? (originalAmount || 0) : amount,
-					paidBy: (e.paidBy as string) || "",
-					splitAmong: (e.splitAmong as string[]) || [],
-					splitType: "equal" as const,
-					currency: (e.currency as string) || "MYR",
-					date: createdAt,
-					createdAt,
-					updatedAt: createdAt,
-					deleted: isDeleted,
-				};
-			});
-
-			const group: GroupState = {
-				id,
-				name: og.name || "Unnamed",
-				members,
-				expenses,
-				createdAt: expenses.length ? Math.min(...expenses.map((e) => e.createdAt)) : Date.now(),
-				updatedAt: og.updatedAt || Date.now(),
-			};
-
-			cacheGroup(group);
-			addMyGroupId(group.id);
-			commit(group);
-		}
-
-		// Set active group
-		const activeGroup = oldGroups[Math.min(oldActiveIdx, oldGroups.length - 1)];
-		if (activeGroup?.id) setActiveGroupId(activeGroup.id);
-		else if (oldGroups.length) setActiveGroupId(getMyGroupIds()[0]);
-
-		// Clean up old keys
-		localStorage.removeItem("mydigital-ahlong_groups");
-		localStorage.removeItem("mydigital-ahlong_payments");
-		localStorage.removeItem("mydigital-ahlong_avatars");
-		localStorage.removeItem("mydigital-ahlong_active");
-	} catch {
-		// Migration failed — leave old data alone
+// --- Flush pending writes on page hide/unload ---
+document.addEventListener("visibilitychange", () => {
+	if (document.visibilityState === "hidden") {
+		flushPendingWrites();
 	}
-}
+});
+window.addEventListener("beforeunload", () => {
+	flushPendingWrites();
+});
 
 // --- Start ---
-migrate().then(boot);
+boot();

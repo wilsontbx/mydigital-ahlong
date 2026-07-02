@@ -4,30 +4,45 @@ import { syncGroupToFirebase, syncGroupToFirebaseAsync, fetchGroup, listenToGrou
 import { showToast } from "../shared/utils";
 
 let onRemoteState: ((s: GroupState) => void) | null = null;
-let localUpdatedAt = 0;
+
+// Per-group echo suppression — tracks the updatedAt of our last local write per group
+const localWriteTimestamps = new Map<string, number>();
 
 export function initSync(setter: (s: GroupState) => void): void {
 	onRemoteState = setter;
 }
 
-// --- Debounced Firebase write ---
+// --- Debounced Firebase write with pending-state tracking ---
 
 let firebaseTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingState: GroupState | null = null;
 
 function debouncedFirebaseWrite(state: GroupState): void {
 	if (!isFirebaseEnabled()) return;
+	pendingState = state;
 	if (firebaseTimer) clearTimeout(firebaseTimer);
 	firebaseTimer = setTimeout(() => {
 		syncGroupToFirebase(state);
+		pendingState = null;
 		firebaseTimer = null;
 	}, 500);
 }
 
-// --- commit: persist state ---
+// Flush any pending debounced write immediately (call on visibilitychange/beforeunload)
+export function flushPendingWrites(): void {
+	if (firebaseTimer && pendingState) {
+		clearTimeout(firebaseTimer);
+		firebaseTimer = null;
+		syncGroupToFirebase(pendingState);
+		pendingState = null;
+	}
+}
+
+// --- commit: persist state locally + schedule Firebase write ---
 
 export function commit(state: GroupState): void {
 	state.updatedAt = Date.now();
-	localUpdatedAt = state.updatedAt;
+	localWriteTimestamps.set(state.id, state.updatedAt);
 	cacheGroup(state);
 	debouncedFirebaseWrite(state);
 }
@@ -38,6 +53,7 @@ export async function flushToFirebase(state: GroupState): Promise<boolean> {
 	if (firebaseTimer) {
 		clearTimeout(firebaseTimer);
 		firebaseTimer = null;
+		pendingState = null;
 	}
 	return syncGroupToFirebaseAsync(state);
 }
@@ -63,7 +79,7 @@ export async function importGroup(groupId: string): Promise<ImportResult | null>
 	cacheGroup(merged);
 	addMyGroupId(merged.id);
 	setActiveGroupId(merged.id);
-	localUpdatedAt = merged.updatedAt;
+	localWriteTimestamps.set(merged.id, merged.updatedAt);
 
 	if (cached) {
 		showToast(`Synced "${merged.name}" 🔄`);
@@ -74,16 +90,18 @@ export async function importGroup(groupId: string): Promise<ImportResult | null>
 	return { state: merged, isNew: !cached };
 }
 
-// --- Firebase listener ---
+// --- Firebase listener with per-group echo suppression ---
 
 function handleRemoteUpdate(updated: GroupState): void {
 	if (!updated.updatedAt) updated.updatedAt = 0;
-	if (updated.updatedAt <= localUpdatedAt) return;
+
+	const lastLocalWrite = localWriteTimestamps.get(updated.id) || 0;
+	if (updated.updatedAt <= lastLocalWrite) return;
 
 	const cached = getCachedGroup(updated.id);
 	const merged = cached ? mergeGroupStates(cached, updated) : updated;
 
-	localUpdatedAt = merged.updatedAt;
+	localWriteTimestamps.set(merged.id, merged.updatedAt);
 	cacheGroup(merged);
 	if (onRemoteState) onRemoteState(merged);
 }
@@ -94,6 +112,8 @@ export function subscribeToGroup(groupId: string): void {
 	listenToGroup(groupId, handleRemoteUpdate);
 }
 
-export function setLocalUpdatedAt(ts: number): void {
-	localUpdatedAt = ts;
+export function setLocalUpdatedAt(ts: number, groupId?: string): void {
+	if (groupId) {
+		localWriteTimestamps.set(groupId, ts);
+	}
 }

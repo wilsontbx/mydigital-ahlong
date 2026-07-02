@@ -114,6 +114,10 @@ export function setActiveGroupId(id: string): void {
 	localStorage.setItem(ACTIVE_GROUP_KEY, id);
 }
 
+export function clearActiveGroupId(): void {
+	localStorage.removeItem(ACTIVE_GROUP_KEY);
+}
+
 // --- Group cache (offline fallback) ---
 
 export function cacheGroup(state: GroupState): void {
@@ -136,46 +140,44 @@ export function removeCachedGroup(id: string): void {
 // --- Merge logic ---
 
 export function mergeGroupStates(local: GroupState, remote: GroupState): GroupState {
-	// Merge members by name
+	// Merge members by id — per-member updatedAt wins
 	const memberMap = new Map<string, Member>();
 	for (const m of local.members) {
-		memberMap.set(m.name, { ...m });
+		memberMap.set(m.id, { ...m });
 	}
 	for (const m of remote.members) {
-		const existing = memberMap.get(m.name);
+		const existing = memberMap.get(m.id);
 		if (existing) {
-			if (remote.updatedAt >= (local.updatedAt || 0)) {
-				memberMap.set(m.name, { ...m });
+			if (m.updatedAt >= existing.updatedAt) {
+				memberMap.set(m.id, { ...m });
 			}
 		} else {
-			memberMap.set(m.name, { ...m });
+			memberMap.set(m.id, { ...m });
 		}
 	}
 
-	// Merge expenses by ID
-	const localExpenseMap = new Map(local.expenses.map((e) => [e.id, e]));
-	const remoteExpenseMap = new Map(remote.expenses.map((e) => [e.id, e]));
-
-	const mergedExpenses = local.expenses.map((e) => {
-		const remoteVersion = remoteExpenseMap.get(e.id);
-		if (remoteVersion && remoteVersion.createdAt >= e.createdAt) {
-			return remoteVersion;
-		}
-		return e;
-	});
+	// Merge expenses by id — per-expense updatedAt wins
+	const expenseMap = new Map(local.expenses.map((e) => [e.id, e]));
 
 	for (const e of remote.expenses) {
-		if (!localExpenseMap.has(e.id)) {
-			mergedExpenses.push(e);
+		const existing = expenseMap.get(e.id);
+		if (existing) {
+			if (e.updatedAt >= existing.updatedAt) {
+				expenseMap.set(e.id, e);
+			}
+		} else {
+			expenseMap.set(e.id, e);
 		}
 	}
+
+	const newerGroup = remote.updatedAt >= local.updatedAt ? remote : local;
 
 	return {
 		id: local.id,
-		name: remote.updatedAt >= (local.updatedAt || 0) ? remote.name : local.name,
+		name: newerGroup.name,
 		members: [...memberMap.values()],
-		expenses: mergedExpenses,
-		createdAt: Math.min(local.createdAt || Date.now(), remote.createdAt || Date.now()),
-		updatedAt: Math.max(remote.updatedAt || 0, local.updatedAt || 0),
+		expenses: [...expenseMap.values()],
+		createdAt: Math.min(local.createdAt, remote.createdAt),
+		updatedAt: Math.max(remote.updatedAt, local.updatedAt),
 	};
 }

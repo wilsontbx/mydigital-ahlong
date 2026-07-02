@@ -42,8 +42,8 @@ function setupDom() {
 	`;
 }
 
-function makeMember(name: string, payment = "", avatar = "😀"): Member {
-	return { name, payment, avatar };
+function makeMember(id: string, name: string, payment = "", avatar = "😀"): Member {
+	return { id, name, payment, avatar, updatedAt: 0 };
 }
 
 function makeExpense(overrides: Partial<Expense> = {}): Expense {
@@ -52,8 +52,8 @@ function makeExpense(overrides: Partial<Expense> = {}): Expense {
 		type: "expense",
 		desc: "Lunch",
 		amount: 30,
-		paidBy: "Alice",
-		splitAmong: ["Alice", "Bob"],
+		paidBy: "m-alice",
+		splitAmong: ["m-alice", "m-bob"],
 		splitType: "equal",
 		currency: "MYR",
 		date: 1000,
@@ -68,7 +68,7 @@ function makeState(): GroupState {
 	return {
 		id: "test-id",
 		name: "Trip",
-		members: [makeMember("Alice"), makeMember("Bob", "DuitNow", "😎")],
+		members: [makeMember("m-alice", "Alice"), makeMember("m-bob", "Bob", "DuitNow", "😎")],
 		expenses: [makeExpense()],
 		createdAt: 1000,
 		updatedAt: Date.now(),
@@ -123,11 +123,15 @@ describe("render functions", () => {
 		expect(document.querySelector("#members-list")!.innerHTML).toContain("💳");
 	});
 
-	it("renders expense form and currency options", () => {
+	it("renders expense form with member IDs as values and names as labels", () => {
 		renderExpenseForm(makeState());
 
-		expect(document.querySelector("#split-checkboxes")!.innerHTML).toContain('value="Alice"');
-		expect(document.querySelector("#paid-by")!.innerHTML).toContain('value="Alice"');
+		const checkboxHtml = document.querySelector("#split-checkboxes")!.innerHTML;
+		expect(checkboxHtml).toContain('value="m-alice"');
+		expect(checkboxHtml).toContain("Alice");
+		const paidByHtml = document.querySelector("#paid-by")!.innerHTML;
+		expect(paidByHtml).toContain('value="m-alice"');
+		expect(paidByHtml).toContain("Alice");
 		expect(document.querySelector("#expense-currency")!.innerHTML).toContain("MYR");
 	});
 
