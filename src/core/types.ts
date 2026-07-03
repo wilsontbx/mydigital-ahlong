@@ -34,6 +34,7 @@ export interface Expense {
 export interface GroupState {
 	id: string;
 	name: string;
+	nameUpdatedAt?: number;
 	members: Member[];
 	expenses: Expense[];
 	createdAt: number;

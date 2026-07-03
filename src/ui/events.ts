@@ -168,6 +168,7 @@ export function setupEvents(getState: () => GroupState, setState: (s: GroupState
 			onRandomize: () => randomGroupName(),
 			onConfirm: (name) => {
 				getState().name = name!;
+				getState().nameUpdatedAt = Date.now();
 				rerender();
 			},
 		});

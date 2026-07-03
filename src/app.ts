@@ -14,7 +14,7 @@ import { setupEvents } from "./ui/events";
 import { setupInstallPrompt } from "./ui/install";
 import { showToast } from "./shared/utils";
 import { isFirebaseEnabled, fetchGroup } from "./core/firebase";
-import { initSync, subscribeToGroup, setLocalUpdatedAt, importGroup, flushPendingWrites } from "./core/sync";
+import { initSync, subscribeToGroup, importGroup, flushPendingWrites } from "./core/sync";
 
 // --- Theme ---
 const THEME_KEY = "mydigital-ahlong_theme";
@@ -71,7 +71,7 @@ async function boot() {
 		const result = await importGroup(incomingGroupId);
 		if (result) {
 			state = result.state;
-			setLocalUpdatedAt(state.updatedAt || 0, state.id);
+			
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -85,7 +85,7 @@ async function boot() {
 		const loaded = await loadGroup(activeId);
 		if (loaded) {
 			state = loaded;
-			setLocalUpdatedAt(state.updatedAt || 0, state.id);
+			
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -100,7 +100,7 @@ async function boot() {
 		const loaded = await loadGroup(firstId);
 		if (loaded) {
 			state = loaded;
-			setLocalUpdatedAt(state.updatedAt || 0, state.id);
+			
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();

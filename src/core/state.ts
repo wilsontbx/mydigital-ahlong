@@ -67,6 +67,7 @@ export function createEmptyState(name?: string): GroupState {
 	return {
 		id: generateId(),
 		name: name || randomGroupName(),
+		nameUpdatedAt: now,
 		members: [],
 		expenses: [],
 		createdAt: now,
@@ -170,11 +171,14 @@ export function mergeGroupStates(local: GroupState, remote: GroupState): GroupSt
 		}
 	}
 
-	const newerGroup = remote.updatedAt >= local.updatedAt ? remote : local;
+	const localNameTs = local.nameUpdatedAt || local.updatedAt;
+	const remoteNameTs = remote.nameUpdatedAt || remote.updatedAt;
+	const newerName = remoteNameTs >= localNameTs ? remote : local;
 
 	return {
 		id: local.id,
-		name: newerGroup.name,
+		name: newerName.name,
+		nameUpdatedAt: Math.max(localNameTs, remoteNameTs),
 		members: [...memberMap.values()],
 		expenses: [...expenseMap.values()],
 		createdAt: Math.min(local.createdAt, remote.createdAt),
