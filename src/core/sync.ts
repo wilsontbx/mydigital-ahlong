@@ -89,13 +89,17 @@ export async function importGroup(groupId: string): Promise<ImportResult | null>
 // --- Firebase listener: Firebase is source of truth ---
 
 function handleRemoteUpdate(updated: GroupState): void {
-	if (pendingState) {
-		// A local write is in-flight — merge with local taking priority
-		// so the user's just-made changes aren't overwritten before they reach Firebase
-		const merged = mergeGroupStates(updated, pendingState);
-		cacheGroup(merged);
-		if (onRemoteState) onRemoteState(merged);
-		return;
+	if (pendingGroupId === updated.id) {
+		// A local write is in-flight — the cache holds the latest local state
+		// (including unsaved changes). Merge so concurrent remote changes are
+		// preserved too, but local (cached) changes take priority.
+		const cached = getCachedGroup(updated.id);
+		if (cached) {
+			const merged = mergeGroupStates(updated, cached);
+			cacheGroup(merged);
+			if (onRemoteState) onRemoteState(merged);
+			return;
+		}
 	}
 	// No pending local write — Firebase is the source of truth
 	cacheGroup(updated);
