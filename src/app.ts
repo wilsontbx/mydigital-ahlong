@@ -1,14 +1,5 @@
 import type { GroupState } from "./core/types";
-import {
-	createEmptyState,
-	getMyGroupIds,
-	addMyGroupId,
-	getActiveGroupId,
-	setActiveGroupId,
-	cacheGroup,
-	getCachedGroup,
-	mergeGroupStates,
-} from "./core/state";
+import { createEmptyState, getMyGroupIds, addMyGroupId, getActiveGroupId, setActiveGroupId, cacheGroup, getCachedGroup } from "./core/state";
 import { render, renderLanding } from "./ui/render";
 import { setupEvents } from "./ui/events";
 import { setupInstallPrompt } from "./ui/install";
@@ -71,7 +62,7 @@ async function boot() {
 		const result = await importGroup(incomingGroupId);
 		if (result) {
 			state = result.state;
-			
+
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -85,7 +76,7 @@ async function boot() {
 		const loaded = await loadGroup(activeId);
 		if (loaded) {
 			state = loaded;
-			
+
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -100,7 +91,7 @@ async function boot() {
 		const loaded = await loadGroup(firstId);
 		if (loaded) {
 			state = loaded;
-			
+
 			render(state);
 			subscribeToGroup(state.id);
 			setupUI();
@@ -113,19 +104,17 @@ async function boot() {
 }
 
 async function loadGroup(groupId: string): Promise<GroupState | null> {
-	const cached = getCachedGroup(groupId);
-
 	if (isFirebaseEnabled()) {
 		const remote = await fetchGroup(groupId);
 		if (remote) {
-			const merged = cached ? mergeGroupStates(cached, remote) : remote;
-			cacheGroup(merged);
-			addMyGroupId(merged.id);
-			return merged;
+			// Firebase is source of truth — use remote directly
+			cacheGroup(remote);
+			addMyGroupId(remote.id);
+			return remote;
 		}
 	}
 
-	return cached;
+	return getCachedGroup(groupId); // offline fallback
 }
 
 function setupUI() {

@@ -54,21 +54,30 @@ export async function fetchGroup(groupId: string): Promise<GroupState | null> {
 	}
 }
 
+// --- Sanitize state for Firebase (strip undefined values) ---
+
+function sanitize<T>(obj: T): T {
+	return JSON.parse(JSON.stringify(obj));
+}
+
 // --- Sync a group to Firebase ---
 
 export function syncGroupToFirebase(state: GroupState): void {
 	if (!isConfigured() || !state.id) return;
 	const groupRef = ref(getDb(), `groups/${state.id}`);
-	set(groupRef, state).catch(() => {});
+	set(groupRef, sanitize(state)).catch((err) => {
+		console.error("[Firebase] sync failed:", err);
+	});
 }
 
 export async function syncGroupToFirebaseAsync(state: GroupState): Promise<boolean> {
 	if (!isConfigured() || !state.id) return false;
 	try {
 		const groupRef = ref(getDb(), `groups/${state.id}`);
-		await set(groupRef, state);
+		await set(groupRef, sanitize(state));
 		return true;
-	} catch {
+	} catch (err) {
+		console.error("[Firebase] sync failed:", err);
 		return false;
 	}
 }

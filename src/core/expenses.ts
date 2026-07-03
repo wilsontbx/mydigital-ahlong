@@ -31,7 +31,7 @@ export function addExpense(state: GroupState, params: AddExpenseParams): GroupSt
 		splitType: params.splitType || "equal",
 		splitValues: params.splitValues,
 		currency: params.currency,
-		category: params.category,
+		category: params.category || "",
 		date: params.date || now,
 		createdAt: now,
 		updatedAt: now,

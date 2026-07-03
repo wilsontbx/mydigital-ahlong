@@ -12,26 +12,28 @@ export function initSync(setter: (s: GroupState) => void): void {
 // --- Debounced Firebase write with pending-state tracking ---
 
 let firebaseTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingState: GroupState | null = null;
+let pendingGroupId: string | null = null;
 
 function debouncedFirebaseWrite(state: GroupState): void {
 	if (!isFirebaseEnabled()) return;
-	pendingState = state;
+	pendingGroupId = state.id;
 	if (firebaseTimer) clearTimeout(firebaseTimer);
 	firebaseTimer = setTimeout(() => {
-		syncGroupToFirebase(state);
-		pendingState = null;
+		const latest = getCachedGroup(pendingGroupId!);
+		if (latest) syncGroupToFirebase(latest);
+		pendingGroupId = null;
 		firebaseTimer = null;
 	}, 500);
 }
 
 // Flush any pending debounced write immediately (call on visibilitychange/beforeunload)
 export function flushPendingWrites(): void {
-	if (firebaseTimer && pendingState) {
+	if (firebaseTimer && pendingGroupId) {
 		clearTimeout(firebaseTimer);
 		firebaseTimer = null;
-		syncGroupToFirebase(pendingState);
-		pendingState = null;
+		const latest = getCachedGroup(pendingGroupId);
+		if (latest) syncGroupToFirebase(latest);
+		pendingGroupId = null;
 	}
 }
 
@@ -49,7 +51,7 @@ export async function flushToFirebase(state: GroupState): Promise<boolean> {
 	if (firebaseTimer) {
 		clearTimeout(firebaseTimer);
 		firebaseTimer = null;
-		pendingState = null;
+		pendingGroupId = null;
 	}
 	return syncGroupToFirebaseAsync(state);
 }
@@ -69,30 +71,35 @@ export async function importGroup(groupId: string): Promise<ImportResult | null>
 	}
 	if (!remote) return null;
 
-	const cached = getCachedGroup(groupId);
-	const merged = cached ? mergeGroupStates(cached, remote) : remote;
+	const isNew = !getCachedGroup(groupId);
+	// Firebase is source of truth — use remote directly
+	cacheGroup(remote);
+	addMyGroupId(remote.id);
+	setActiveGroupId(remote.id);
 
-	cacheGroup(merged);
-	addMyGroupId(merged.id);
-	setActiveGroupId(merged.id);
-
-	if (cached) {
-		showToast(`Synced "${merged.name}" 🔄`);
+	if (!isNew) {
+		showToast(`Synced "${remote.name}" 🔄`);
 	} else {
-		showToast(`Joined "${merged.name}" ✅`);
+		showToast(`Joined "${remote.name}" ✅`);
 	}
 
-	return { state: merged, isNew: !cached };
+	return { state: remote, isNew };
 }
 
-// --- Firebase listener: always accept and merge remote state ---
+// --- Firebase listener: Firebase is source of truth ---
 
 function handleRemoteUpdate(updated: GroupState): void {
-	const cached = getCachedGroup(updated.id);
-	const merged = cached ? mergeGroupStates(cached, updated) : updated;
-
-	cacheGroup(merged);
-	if (onRemoteState) onRemoteState(merged);
+	if (pendingState) {
+		// A local write is in-flight — merge with local taking priority
+		// so the user's just-made changes aren't overwritten before they reach Firebase
+		const merged = mergeGroupStates(updated, pendingState);
+		cacheGroup(merged);
+		if (onRemoteState) onRemoteState(merged);
+		return;
+	}
+	// No pending local write — Firebase is the source of truth
+	cacheGroup(updated);
+	if (onRemoteState) onRemoteState(updated);
 }
 
 export function subscribeToGroup(groupId: string): void {
