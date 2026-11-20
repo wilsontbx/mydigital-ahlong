@@ -27,9 +27,9 @@ export function useExpenses(groupId: string | null) {
           ...doc.data(),
         })) as Expense[];
         data.sort((a, b) => {
-          const aTime = a.date?.seconds || 0;
-          const bTime = b.date?.seconds || 0;
-          return bTime - aTime;
+          const aDate = a.dates?.[0] || '';
+          const bDate = b.dates?.[0] || '';
+          return bDate.localeCompare(aDate);
         });
         setExpenses(data);
         setLoading(false);

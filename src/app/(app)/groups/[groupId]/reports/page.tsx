@@ -6,7 +6,7 @@ import { format, parseISO } from 'date-fns';
 import { useGroup } from '@/lib/hooks/useGroup';
 import { useExpenses } from '@/lib/hooks/useExpenses';
 import { formatCurrency } from '@/lib/utils/currency';
-import { parseExpenseDate } from '@/lib/utils/dateFormat';
+import { getExpenseDates } from '@/lib/utils/dateFormat';
 import Spinner from '@/components/ui/Spinner';
 import StatCard from '@/components/reports/StatCard';
 import SpendingByCategory from '@/components/reports/SpendingByCategory';
@@ -41,10 +41,12 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
 
     const dailyTotals: Record<string, number> = {};
     expenses.forEach((e) => {
-      const date = parseExpenseDate(e.date);
-      if (!date) return;
-      const key = format(date, 'yyyy-MM-dd');
-      dailyTotals[key] = (dailyTotals[key] || 0) + (e.baseCurrencyAmount || e.amount);
+      const expDates = getExpenseDates(e);
+      if (expDates.length === 0) return;
+      const perDay = (e.baseCurrencyAmount || e.amount) / expDates.length;
+      expDates.forEach((key) => {
+        dailyTotals[key] = (dailyTotals[key] || 0) + perDay;
+      });
     });
     const topDay = Object.entries(dailyTotals).reduce(
       (max, [day, total]) => (total > max.total ? { day, total } : max),

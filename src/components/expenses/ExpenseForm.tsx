@@ -39,14 +39,25 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
   const [participants, setParticipants] = useState<string[]>(group.memberIds);
   const [splits, setSplits] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
-  const [date, setDate] = useState(() => {
-    const today = new Date().toISOString().split('T')[0];
+  const [dates, setDates] = useState<string[]>(() => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (group.startDate && group.endDate) {
-      if (today >= group.startDate && today <= group.endDate) return today;
-      return group.startDate;
+      if (today >= group.startDate && today <= group.endDate) return [today];
+      return [group.startDate];
     }
-    return today;
+    return [today];
   });
+
+  const toggleDate = (dayStr: string) => {
+    setDates((prev) => {
+      if (prev.includes(dayStr)) {
+        if (isRegularExpense && prev.length === 1) return prev;
+        return prev.filter((d) => d !== dayStr);
+      }
+      return [...prev, dayStr].sort();
+    });
+  };
 
   const isDifferentCurrency = currency !== group.currency;
   const numAmount = parseFloat(amount) || 0;
@@ -109,7 +120,7 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         splitType,
         splits: finalSplits,
         participants,
-        date: date ? new Date(date) : undefined,
+        dates: dates.length > 0 ? dates : undefined,
         createdBy: user.uid,
       });
       toast.success(
@@ -138,13 +149,14 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
               onClick={() => {
                 setExpenseType(t.value);
                 if (t.value === 'prepaid') {
-                  setDate('');
-                } else if (!date) {
-                  const today = new Date().toISOString().split('T')[0];
+                  setDates([]);
+                } else if (dates.length === 0) {
+                  const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                   if (group.startDate && group.endDate) {
-                    setDate(today >= group.startDate && today <= group.endDate ? today : group.startDate);
+                    setDates([today >= group.startDate && today <= group.endDate ? today : group.startDate]);
                   } else {
-                    setDate(today);
+                    setDates([today]);
                   }
                 }
               }}
@@ -226,19 +238,20 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         </div>
       )}
 
-      {/* Date picker */}
+      {/* Date picker — multi-select */}
       {group.startDate && group.endDate ? (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Date{!isRegularExpense && <span className="text-gray-400 font-normal"> (optional)</span>}
+            Date{dates.length > 1 && `s (${dates.length})`}
+            {!isRegularExpense && dates.length === 0 && <span className="text-gray-400 font-normal"> (optional)</span>}
           </label>
           <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
             {!isRegularExpense && (
               <button
                 type="button"
-                onClick={() => setDate('')}
+                onClick={() => setDates([])}
                 className={`shrink-0 w-16 py-2 rounded-lg text-center text-sm font-medium border transition-colors ${
-                  !date
+                  dates.length === 0
                     ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                     : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
@@ -253,12 +266,12 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
               end: parseISO(group.endDate),
             }).map((day) => {
               const dayStr = format(day, 'yyyy-MM-dd');
-              const isSelected = date === dayStr;
+              const isSelected = dates.includes(dayStr);
               return (
                 <button
                   key={dayStr}
                   type="button"
-                  onClick={() => setDate(dayStr)}
+                  onClick={() => toggleDate(dayStr)}
                   className={`shrink-0 w-16 py-2 rounded-lg text-center text-sm font-medium border transition-colors ${
                     isSelected
                       ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
@@ -277,8 +290,8 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         <Input
           label={isRegularExpense ? 'Date' : 'Date (optional)'}
           type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
+          value={dates[0] || ''}
+          onChange={(e) => setDates(e.target.value ? [e.target.value] : [])}
           required={isRegularExpense}
         />
       )}

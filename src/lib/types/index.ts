@@ -52,7 +52,7 @@ export interface Expense {
   splitType: SplitType;
   splits: Record<string, number>;
   participants: string[];
-  date?: Timestamp;
+  dates?: string[];
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

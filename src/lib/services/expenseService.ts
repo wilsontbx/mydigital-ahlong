@@ -3,7 +3,6 @@ import {
   doc,
   runTransaction,
   serverTimestamp,
-  Timestamp,
   increment,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -21,7 +20,7 @@ interface ExpenseData {
   splitType: 'equal' | 'exact' | 'percentage';
   splits: Record<string, number>;
   participants: string[];
-  date?: Date;
+  dates?: string[];
   createdBy: string;
 }
 
@@ -51,10 +50,8 @@ export async function addExpense(groupId: string, data: ExpenseData): Promise<st
       currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) - balanceAmount;
     }
 
-    const { date, ...rest } = data;
     transaction.set(expenseRef, {
-      ...rest,
-      ...(date ? { date: Timestamp.fromDate(date) } : {}),
+      ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -111,10 +108,8 @@ export async function updateExpense(
       currentBalances[uid][newData.paidBy] = (currentBalances[uid][newData.paidBy] || 0) - balanceAmount;
     }
 
-    const { date: newDate, ...newRest } = newData;
     transaction.update(expenseRef, {
-      ...newRest,
-      ...(newDate ? { date: Timestamp.fromDate(newDate) } : {}),
+      ...newData,
       updatedAt: serverTimestamp(),
     });
 

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils/currency';
-import { parseExpenseDate } from '@/lib/utils/dateFormat';
+import { getExpenseDates } from '@/lib/utils/dateFormat';
 import type { Expense, GroupMember } from '@/lib/types';
 import ExpenseItem from './ExpenseItem';
 
@@ -34,8 +34,8 @@ export default function ExpenseList({ expenses, members, currency, groupId, curr
         prepaid.push(e);
         prepaidTotal += amt;
       } else {
-        const date = parseExpenseDate(e.date);
-        const key = date ? format(date, 'yyyy-MM-dd') : 'unknown';
+        const expDates = getExpenseDates(e);
+        const key = expDates.length > 0 ? expDates[0] : 'unknown';
         if (!map.has(key)) map.set(key, []);
         map.get(key)!.push(e);
       }

@@ -16,10 +16,14 @@ export function timeAgo(timestamp: Timestamp | Date): string {
   return formatDistanceToNow(date, { addSuffix: true });
 }
 
-export function parseExpenseDate(value: unknown): Date | null {
-  if (!value) return null;
-  const date = typeof (value as Timestamp).toDate === 'function'
-    ? (value as Timestamp).toDate()
-    : new Date(value as string);
-  return isNaN(date.getTime()) ? null : date;
+export function getExpenseDates(expense: { dates?: string[]; date?: unknown }): string[] {
+  if (expense.dates && expense.dates.length > 0) return expense.dates;
+  // Legacy: single date field (Timestamp or string)
+  const val = expense.date;
+  if (!val) return [];
+  const d = typeof (val as Timestamp).toDate === 'function'
+    ? (val as Timestamp).toDate()
+    : new Date(val as string);
+  if (isNaN(d.getTime())) return [];
+  return [format(d, 'yyyy-MM-dd')];
 }
