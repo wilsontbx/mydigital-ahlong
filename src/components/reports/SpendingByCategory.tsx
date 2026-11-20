@@ -14,7 +14,7 @@ interface Props {
 export default function SpendingByCategory({ expenses, currency }: Props) {
   const categoryTotals: Record<string, number> = {};
   expenses.forEach((e) => {
-    categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+    categoryTotals[e.category] = (categoryTotals[e.category] || 0) + (e.baseCurrencyAmount || e.amount);
   });
 
   const data = Object.entries(categoryTotals)

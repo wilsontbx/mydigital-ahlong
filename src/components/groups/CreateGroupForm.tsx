@@ -24,6 +24,8 @@ export default function CreateGroupForm() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Group['category']>('travel');
   const [currency, setCurrency] = useState('MYR');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,7 +34,7 @@ export default function CreateGroupForm() {
     setLoading(true);
 
     // Navigate optimistically — the real-time listener will show data when it arrives
-    const groupPromise = createGroup(name, description, category, currency, {
+    const groupPromise = createGroup(name, description, category, currency, startDate, endDate, {
       uid: user.uid,
       displayName: user.displayName || 'User',
       email: user.email || '',
@@ -86,6 +88,26 @@ export default function CreateGroupForm() {
               {cat.label}
             </button>
           ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Date Range (optional)
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            placeholder="Start date"
+          />
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            placeholder="End date"
+            min={startDate}
+          />
         </div>
       </div>
       <CurrencyPicker

@@ -13,7 +13,7 @@ interface Props {
 export default function SpendingByPerson({ expenses, members, currency }: Props) {
   const personTotals: Record<string, number> = {};
   expenses.forEach((e) => {
-    personTotals[e.paidBy] = (personTotals[e.paidBy] || 0) + e.amount;
+    personTotals[e.paidBy] = (personTotals[e.paidBy] || 0) + (e.baseCurrencyAmount || e.amount);
   });
 
   const data = Object.entries(personTotals)

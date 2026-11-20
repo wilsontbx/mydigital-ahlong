@@ -15,7 +15,7 @@ export default function SpendingOverTime({ expenses, currency }: Props) {
   expenses.forEach((e) => {
     const date = e.date?.toDate ? e.date.toDate() : new Date(e.date as unknown as string);
     const key = format(date, 'yyyy-MM');
-    monthlyTotals[key] = (monthlyTotals[key] || 0) + e.amount;
+    monthlyTotals[key] = (monthlyTotals[key] || 0) + (e.baseCurrencyAmount || e.amount);
   });
 
   const data = Object.entries(monthlyTotals)

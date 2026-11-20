@@ -1,8 +1,6 @@
 import {
   collection,
   doc,
-  setDoc,
-  deleteDoc,
   runTransaction,
   serverTimestamp,
   Timestamp,
@@ -17,11 +15,13 @@ interface ExpenseData {
   exchangeRate: number;
   baseCurrencyAmount: number;
   category: string;
+  expenseType?: string;
+  paymentMethod?: string;
   paidBy: string;
   splitType: 'equal' | 'exact' | 'percentage';
   splits: Record<string, number>;
   participants: string[];
-  date: Date;
+  date?: Date;
   createdBy: string;
 }
 
@@ -48,7 +48,7 @@ export async function addExpense(groupId: string, data: ExpenseData): Promise<st
 
     transaction.set(expenseRef, {
       ...data,
-      date: Timestamp.fromDate(data.date),
+      ...(data.date ? { date: Timestamp.fromDate(data.date) } : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -97,7 +97,7 @@ export async function updateExpense(
 
     transaction.update(expenseRef, {
       ...newData,
-      date: Timestamp.fromDate(newData.date),
+      ...(newData.date ? { date: Timestamp.fromDate(newData.date) } : {}),
       updatedAt: serverTimestamp(),
     });
 

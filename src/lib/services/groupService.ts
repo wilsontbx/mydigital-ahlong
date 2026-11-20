@@ -5,6 +5,7 @@ import {
   getDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
@@ -27,16 +28,20 @@ export async function createGroup(
   description: string,
   category: Group['category'],
   currency: string,
+  startDate: string,
+  endDate: string,
   creator: { uid: string; displayName: string; email: string }
 ): Promise<string> {
   const groupRef = doc(collection(db, 'groups'));
   const inviteCode = generateInviteCode();
 
-  const groupData = {
+  const groupData: Record<string, unknown> = {
     name,
     description,
     category,
     currency,
+    ...(startDate && { startDate }),
+    ...(endDate && { endDate }),
     createdBy: creator.uid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -115,7 +120,7 @@ export async function joinGroupByCode(
 
 export async function updateGroup(
   groupId: string,
-  data: { name?: string; description?: string; exchangeRates?: Record<string, number> }
+  data: { name?: string; description?: string; startDate?: string; endDate?: string; exchangeRates?: Record<string, number> }
 ): Promise<void> {
   await updateDoc(doc(db, 'groups', groupId), {
     ...data,
@@ -130,7 +135,7 @@ export async function removeMember(
   const batch = writeBatch(db);
   batch.update(doc(db, 'groups', groupId), {
     memberIds: arrayRemove(userId),
-    [`members.${userId}`]: deleteDoc as never,
+    [`members.${userId}`]: deleteField(),
     updatedAt: serverTimestamp(),
   });
   batch.set(doc(db, 'users', userId), {

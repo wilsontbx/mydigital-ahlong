@@ -3,7 +3,6 @@ import {
   doc,
   runTransaction,
   serverTimestamp,
-  increment,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 

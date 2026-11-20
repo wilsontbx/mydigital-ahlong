@@ -22,21 +22,21 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
             Hey, {user?.displayName || 'there'}!
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Manage your split bills and settle up
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+            Manage your split bills
           </p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/groups/join">
-            <Button variant="secondary">Join Group</Button>
+        <div className="flex gap-2">
+          <Link href="/groups/join" className="flex-1 sm:flex-none">
+            <Button variant="secondary" size="sm" className="w-full">Join Group</Button>
           </Link>
-          <Link href="/groups/new">
-            <Button>New Group</Button>
+          <Link href="/groups/new" className="flex-1 sm:flex-none">
+            <Button size="sm" className="w-full">New Group</Button>
           </Link>
         </div>
       </div>
@@ -49,7 +49,7 @@ export default function DashboardPage() {
             </svg>
           }
           title="No groups yet"
-          description="Create a group to start splitting bills with friends, roommates, or travel buddies."
+          description="Create a group to start splitting bills with friends."
           action={
             <Link href="/groups/new">
               <Button>Create Your First Group</Button>

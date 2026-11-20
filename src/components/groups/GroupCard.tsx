@@ -35,6 +35,11 @@ export default function GroupCard({ group }: { group: Group }) {
           {memberCount} {memberCount === 1 ? 'member' : 'members'}
         </span>
       </div>
+      {group.startDate && group.endDate && (
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+          {group.startDate} → {group.endDate}
+        </p>
+      )}
       <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
         <span className="text-sm text-gray-500 dark:text-gray-400">
           Total: {formatCurrency(group.totalExpenses, group.currency)}

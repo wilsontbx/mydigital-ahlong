@@ -19,6 +19,8 @@ export interface Group {
   description: string;
   category: 'travel' | 'household' | 'couple' | 'other';
   currency: string;
+  startDate?: string;
+  endDate?: string;
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -32,6 +34,10 @@ export interface Group {
 
 export type SplitType = 'equal' | 'exact' | 'percentage';
 
+export type PaymentMethod = 'cash' | 'card' | 'ewallet' | 'transfer' | 'other';
+
+export type ExpenseType = 'expense' | 'prepaid' | 'advance';
+
 export interface Expense {
   id?: string;
   description: string;
@@ -40,11 +46,13 @@ export interface Expense {
   exchangeRate: number;
   baseCurrencyAmount: number;
   category: string;
+  expenseType?: ExpenseType;
+  paymentMethod?: PaymentMethod;
   paidBy: string;
   splitType: SplitType;
   splits: Record<string, number>;
   participants: string[];
-  date: Timestamp;
+  date?: Timestamp;
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
