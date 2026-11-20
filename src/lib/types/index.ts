@@ -36,7 +36,7 @@ export type SplitType = 'equal' | 'exact' | 'percentage';
 
 export type PaymentMethod = 'cash' | 'card' | 'ewallet' | 'transfer' | 'other';
 
-export type ExpenseType = 'expense' | 'prepaid' | 'advance';
+export type ExpenseType = 'expense' | 'prepaid';
 
 export interface Expense {
   id?: string;
@@ -58,14 +58,6 @@ export interface Expense {
   updatedAt: Timestamp;
 }
 
-export interface Settlement {
-  id?: string;
-  fromUserId: string;
-  toUserId: string;
-  amount: number;
-  createdBy: string;
-  createdAt: Timestamp;
-}
 
 export interface Invite {
   groupId: string;

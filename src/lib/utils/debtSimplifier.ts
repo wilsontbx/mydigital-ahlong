@@ -12,7 +12,6 @@ export function simplifyDebts(
     }
   }
 
-  // Only count each pair once — the balances map is symmetric so divide by 2
   for (const key of Object.keys(netBalances)) {
     netBalances[key] = netBalances[key] / 2;
   }
@@ -21,10 +20,11 @@ export function simplifyDebts(
   const debtors: { id: string; amount: number }[] = [];
 
   for (const [id, amount] of Object.entries(netBalances)) {
-    if (amount > 0.01) {
-      creditors.push({ id, amount });
-    } else if (amount < -0.01) {
-      debtors.push({ id, amount: Math.abs(amount) });
+    const rounded = Math.round(amount * 100) / 100;
+    if (rounded > 0) {
+      creditors.push({ id, amount: rounded });
+    } else if (rounded < 0) {
+      debtors.push({ id, amount: Math.abs(rounded) });
     }
   }
 
@@ -38,7 +38,7 @@ export function simplifyDebts(
   while (i < debtors.length && j < creditors.length) {
     const settlement = Math.min(debtors[i].amount, creditors[j].amount);
 
-    if (settlement > 0.01) {
+    if (settlement > 0) {
       result.push({
         from: debtors[i].id,
         to: creditors[j].id,
@@ -46,11 +46,11 @@ export function simplifyDebts(
       });
     }
 
-    debtors[i].amount -= settlement;
-    creditors[j].amount -= settlement;
+    debtors[i].amount = Math.round((debtors[i].amount - settlement) * 100) / 100;
+    creditors[j].amount = Math.round((creditors[j].amount - settlement) * 100) / 100;
 
-    if (debtors[i].amount < 0.01) i++;
-    if (creditors[j].amount < 0.01) j++;
+    if (debtors[i].amount <= 0) i++;
+    if (creditors[j].amount <= 0) j++;
   }
 
   return result;

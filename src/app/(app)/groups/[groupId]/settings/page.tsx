@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { format, parseISO, eachDayOfInterval } from 'date-fns';
 import { useGroup } from '@/lib/hooks/useGroup';
 import { useExpenses } from '@/lib/hooks/useExpenses';
+import { parseExpenseDate } from '@/lib/utils/dateFormat';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { updateGroup, deleteGroup } from '@/lib/services/groupService';
 import Button from '@/components/ui/Button';
@@ -58,7 +59,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   // Get dates that have expenses
   const expenseDateSet = new Set<string>();
   expenses.forEach((e) => {
-    const date = e.date?.toDate ? e.date.toDate() : new Date(e.date as unknown as string);
+    const date = parseExpenseDate(e.date);
+    if (!date) return;
     expenseDateSet.add(format(date, 'yyyy-MM-dd'));
   });
 

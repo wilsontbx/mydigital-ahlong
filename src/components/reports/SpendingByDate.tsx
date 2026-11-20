@@ -3,6 +3,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { formatCurrency } from '@/lib/utils/currency';
+import { parseExpenseDate } from '@/lib/utils/dateFormat';
 import type { Expense } from '@/lib/types';
 
 interface Props {
@@ -16,7 +17,8 @@ export default function SpendingByDate({ expenses, currency, startDate, endDate 
   const dailyTotals: Record<string, number> = {};
 
   expenses.forEach((e) => {
-    const date = e.date?.toDate ? e.date.toDate() : new Date(e.date as unknown as string);
+    const date = parseExpenseDate(e.date);
+    if (!date) return;
     const key = format(date, 'yyyy-MM-dd');
     const amount = e.baseCurrencyAmount || e.amount;
     dailyTotals[key] = (dailyTotals[key] || 0) + amount;

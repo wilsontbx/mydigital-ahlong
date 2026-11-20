@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils/currency';
+import { parseExpenseDate } from '@/lib/utils/dateFormat';
 import type { Expense, GroupMember } from '@/lib/types';
 import ExpenseItem from './ExpenseItem';
 
@@ -15,15 +16,13 @@ interface ExpenseListProps {
 }
 
 export default function ExpenseList({ expenses, members, currency, groupId, currentUserId }: ExpenseListProps) {
-  const { prepaidExpenses, advanceExpenses, grouped, summary } = useMemo(() => {
+  const { prepaidExpenses, grouped, summary } = useMemo(() => {
     const dateGroups: { dateKey: string; label: string; expenses: Expense[]; total: number }[] = [];
     const map = new Map<string, Expense[]>();
     const prepaid: Expense[] = [];
-    const advance: Expense[] = [];
 
     let totalSpent = 0;
     let prepaidTotal = 0;
-    let advanceTotal = 0;
     let myTotal = 0;
     let youPaid = 0;
 
@@ -34,12 +33,9 @@ export default function ExpenseList({ expenses, members, currency, groupId, curr
       if (type === 'prepaid') {
         prepaid.push(e);
         prepaidTotal += amt;
-      } else if (type === 'advance') {
-        advance.push(e);
-        advanceTotal += amt;
       } else {
-        const date = e.date?.toDate ? e.date.toDate() : new Date(e.date as unknown as string);
-        const key = !e.date || isNaN(date.getTime()) ? 'unknown' : format(date, 'yyyy-MM-dd');
+        const date = parseExpenseDate(e.date);
+        const key = date ? format(date, 'yyyy-MM-dd') : 'unknown';
         if (!map.has(key)) map.set(key, []);
         map.get(key)!.push(e);
       }
@@ -61,9 +57,8 @@ export default function ExpenseList({ expenses, members, currency, groupId, curr
 
     return {
       prepaidExpenses: prepaid,
-      advanceExpenses: advance,
       grouped: dateGroups.sort((a, b) => b.dateKey.localeCompare(a.dateKey)),
-      summary: { totalSpent, prepaidTotal, advanceTotal, myTotal, youPaid, count: expenses.length },
+      summary: { totalSpent, prepaidTotal, myTotal, youPaid, count: expenses.length },
     };
   }, [expenses, currentUserId]);
 
@@ -114,29 +109,10 @@ export default function ExpenseList({ expenses, members, currency, groupId, curr
         </div>
       )}
 
-      {/* Advance section */}
-      {advanceExpenses.length > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wider">
-              💰 Advance Payments ({advanceExpenses.length})
-            </h3>
-            <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-              {formatCurrency(summary.advanceTotal, currency)}
-            </span>
-          </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700 border-l-2 border-purple-300 dark:border-purple-700 pl-3">
-            {advanceExpenses.map((expense) => (
-              <ExpenseItem key={expense.id} expense={expense} members={members} currency={currency} groupId={groupId} currentUserId={currentUserId} />
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Regular expenses grouped by date */}
       {grouped.length > 0 && (
         <div className="space-y-4">
-          {(prepaidExpenses.length > 0 || advanceExpenses.length > 0) && (
+          {prepaidExpenses.length > 0 && (
             <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               🧾 Trip Expenses
             </h3>

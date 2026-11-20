@@ -35,20 +35,26 @@ export async function addExpense(groupId: string, data: ExpenseData): Promise<st
 
     const currentBalances = groupSnap.data().balances || {};
 
+    const equalShare = data.splitType === 'equal'
+      ? data.baseCurrencyAmount / data.participants.length
+      : null;
+
     for (const [uid, shareAmount] of Object.entries(data.splits)) {
       if (uid === data.paidBy) continue;
 
+      const balanceAmount = equalShare ?? shareAmount;
       const payer = data.paidBy;
       if (!currentBalances[payer]) currentBalances[payer] = {};
       if (!currentBalances[uid]) currentBalances[uid] = {};
 
-      currentBalances[payer][uid] = (currentBalances[payer][uid] || 0) + shareAmount;
-      currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) - shareAmount;
+      currentBalances[payer][uid] = (currentBalances[payer][uid] || 0) + balanceAmount;
+      currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) - balanceAmount;
     }
 
+    const { date, ...rest } = data;
     transaction.set(expenseRef, {
-      ...data,
-      ...(data.date ? { date: Timestamp.fromDate(data.date) } : {}),
+      ...rest,
+      ...(date ? { date: Timestamp.fromDate(date) } : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -79,25 +85,36 @@ export async function updateExpense(
     const currentBalances = groupSnap.data().balances || {};
 
     // Reverse old expense impact
+    const oldEqualShare = oldData.splitType === 'equal'
+      ? oldData.baseCurrencyAmount / oldData.participants.length
+      : null;
+
     for (const [uid, shareAmount] of Object.entries(oldData.splits)) {
       if (uid === oldData.paidBy) continue;
+      const balanceAmount = oldEqualShare ?? shareAmount;
       const payer = oldData.paidBy;
-      if (currentBalances[payer]) currentBalances[payer][uid] = (currentBalances[payer][uid] || 0) - shareAmount;
-      if (currentBalances[uid]) currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) + shareAmount;
+      if (currentBalances[payer]) currentBalances[payer][uid] = (currentBalances[payer][uid] || 0) - balanceAmount;
+      if (currentBalances[uid]) currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) + balanceAmount;
     }
 
     // Apply new expense impact
+    const newEqualShare = newData.splitType === 'equal'
+      ? newData.baseCurrencyAmount / newData.participants.length
+      : null;
+
     for (const [uid, shareAmount] of Object.entries(newData.splits)) {
       if (uid === newData.paidBy) continue;
+      const balanceAmount = newEqualShare ?? shareAmount;
       if (!currentBalances[newData.paidBy]) currentBalances[newData.paidBy] = {};
       if (!currentBalances[uid]) currentBalances[uid] = {};
-      currentBalances[newData.paidBy][uid] = (currentBalances[newData.paidBy][uid] || 0) + shareAmount;
-      currentBalances[uid][newData.paidBy] = (currentBalances[uid][newData.paidBy] || 0) - shareAmount;
+      currentBalances[newData.paidBy][uid] = (currentBalances[newData.paidBy][uid] || 0) + balanceAmount;
+      currentBalances[uid][newData.paidBy] = (currentBalances[uid][newData.paidBy] || 0) - balanceAmount;
     }
 
+    const { date: newDate, ...newRest } = newData;
     transaction.update(expenseRef, {
-      ...newData,
-      ...(newData.date ? { date: Timestamp.fromDate(newData.date) } : {}),
+      ...newRest,
+      ...(newDate ? { date: Timestamp.fromDate(newDate) } : {}),
       updatedAt: serverTimestamp(),
     });
 
@@ -123,11 +140,16 @@ export async function deleteExpense(
 
     const currentBalances = groupSnap.data().balances || {};
 
+    const delEqualShare = expenseData.splitType === 'equal'
+      ? expenseData.baseCurrencyAmount / expenseData.participants.length
+      : null;
+
     for (const [uid, shareAmount] of Object.entries(expenseData.splits)) {
       if (uid === expenseData.paidBy) continue;
+      const balanceAmount = delEqualShare ?? shareAmount;
       const payer = expenseData.paidBy;
-      if (currentBalances[payer]) currentBalances[payer][uid] = (currentBalances[payer][uid] || 0) - shareAmount;
-      if (currentBalances[uid]) currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) + shareAmount;
+      if (currentBalances[payer]) currentBalances[payer][uid] = (currentBalances[payer][uid] || 0) - balanceAmount;
+      if (currentBalances[uid]) currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) + balanceAmount;
     }
 
     transaction.delete(expenseRef);

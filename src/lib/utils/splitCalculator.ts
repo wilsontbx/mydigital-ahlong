@@ -1,3 +1,11 @@
+function toCents(amount: number): number {
+  return Math.round(amount * 100);
+}
+
+function toRinggit(cents: number): number {
+  return cents / 100;
+}
+
 export function calculateEqualSplit(
   amount: number,
   participantIds: string[]
@@ -5,12 +13,18 @@ export function calculateEqualSplit(
   const count = participantIds.length;
   if (count === 0) return {};
 
-  const perPerson = Math.floor((amount / count) * 100) / 100;
-  const remainder = Math.round((amount - perPerson * count) * 100) / 100;
+  const totalCents = toCents(amount);
+  const baseCents = Math.floor(totalCents / count);
+  let remainderCents = totalCents - baseCents * count;
 
   const splits: Record<string, number> = {};
-  participantIds.forEach((id, index) => {
-    splits[id] = index === 0 ? perPerson + remainder : perPerson;
+  participantIds.forEach((id) => {
+    if (remainderCents > 0) {
+      splits[id] = toRinggit(baseCents + 1);
+      remainderCents--;
+    } else {
+      splits[id] = toRinggit(baseCents);
+    }
   });
 
   return splits;
@@ -20,25 +34,28 @@ export function validateExactSplit(
   splits: Record<string, number>,
   totalAmount: number
 ): { valid: boolean; difference: number } {
-  const sum = Object.values(splits).reduce((acc, val) => acc + val, 0);
-  const difference = Math.round((totalAmount - sum) * 100) / 100;
-  return { valid: Math.abs(difference) < 0.01, difference };
+  const totalCents = toCents(totalAmount);
+  const sumCents = Object.values(splits).reduce((acc, val) => acc + toCents(val), 0);
+  const diffCents = totalCents - sumCents;
+  return { valid: diffCents === 0, difference: toRinggit(diffCents) };
 }
 
 export function calculatePercentageSplit(
   amount: number,
   percentages: Record<string, number>
 ): Record<string, number> {
+  const totalCents = toCents(amount);
   const splits: Record<string, number> = {};
   const entries = Object.entries(percentages);
 
-  let allocated = 0;
+  let allocatedCents = 0;
   entries.forEach(([id, pct], index) => {
     if (index === entries.length - 1) {
-      splits[id] = Math.round((amount - allocated) * 100) / 100;
+      splits[id] = toRinggit(totalCents - allocatedCents);
     } else {
-      splits[id] = Math.round((amount * pct / 100) * 100) / 100;
-      allocated += splits[id];
+      const cents = Math.round(totalCents * pct / 100);
+      splits[id] = toRinggit(cents);
+      allocatedCents += cents;
     }
   });
 
@@ -49,6 +66,9 @@ export function validatePercentages(percentages: Record<string, number>): {
   valid: boolean;
   total: number;
 } {
-  const total = Object.values(percentages).reduce((acc, val) => acc + val, 0);
-  return { valid: Math.abs(total - 100) < 0.01, total };
+  const totalBps = Object.values(percentages).reduce(
+    (acc, val) => acc + Math.round(val * 100),
+    0
+  );
+  return { valid: totalBps === 10000, total: totalBps / 100 };
 }

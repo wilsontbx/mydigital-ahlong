@@ -23,7 +23,6 @@ interface ExpenseFormProps {
 const EXPENSE_TYPES: { value: ExpenseType; label: string; icon: string; desc: string }[] = [
   { value: 'expense', label: 'Expense', icon: '🧾', desc: 'Regular trip expense' },
   { value: 'prepaid', label: 'Pre-paid', icon: '📋', desc: 'Booked before the trip (flight, hotel, etc.)' },
-  { value: 'advance', label: 'Advance', icon: '💰', desc: 'Collected upfront from members' },
 ];
 
 export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
@@ -103,20 +102,18 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         currency,
         exchangeRate: numRate,
         baseCurrencyAmount,
-        category: expenseType === 'advance' ? 'Advance Payment' : category,
+        category,
         expenseType,
         paymentMethod,
         paidBy,
         splitType,
         splits: finalSplits,
         participants,
-        date: isRegularExpense ? new Date(date) : undefined,
+        date: date ? new Date(date) : undefined,
         createdBy: user.uid,
       });
       toast.success(
-        expenseType === 'advance' ? 'Advance payment recorded!' :
-        expenseType === 'prepaid' ? 'Pre-paid expense added!' :
-        'Expense added!'
+        expenseType === 'prepaid' ? 'Pre-paid expense added!' : 'Expense added!'
       );
       router.push(`/groups/${groupId}`);
     } catch (err) {
@@ -133,16 +130,22 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Type
         </label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {EXPENSE_TYPES.map((t) => (
             <button
               key={t.value}
               type="button"
               onClick={() => {
                 setExpenseType(t.value);
-                if (t.value === 'advance') {
-                  setCategory('Advance Payment');
-                  setDescription('Advance payment');
+                if (t.value === 'prepaid') {
+                  setDate('');
+                } else if (!date) {
+                  const today = new Date().toISOString().split('T')[0];
+                  if (group.startDate && group.endDate) {
+                    setDate(today >= group.startDate && today <= group.endDate ? today : group.startDate);
+                  } else {
+                    setDate(today);
+                  }
                 }
               }}
               className={`p-3 rounded-lg text-center border transition-colors ${
@@ -173,7 +176,6 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         onChange={(e) => setDescription(e.target.value)}
         placeholder={
           expenseType === 'prepaid' ? 'e.g. Flight tickets, Hotel booking' :
-          expenseType === 'advance' ? 'e.g. Advance payment collection' :
           'What was this expense for?'
         }
         required
@@ -224,56 +226,64 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         </div>
       )}
 
-      {/* Date picker — only for regular expenses */}
-      {isRegularExpense && (
-        <>
-          {group.startDate && group.endDate ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Date
-              </label>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-                {eachDayOfInterval({
-                  start: parseISO(group.startDate),
-                  end: parseISO(group.endDate),
-                }).map((day) => {
-                  const dayStr = format(day, 'yyyy-MM-dd');
-                  const isSelected = date === dayStr;
-                  return (
-                    <button
-                      key={dayStr}
-                      type="button"
-                      onClick={() => setDate(dayStr)}
-                      className={`shrink-0 w-16 py-2 rounded-lg text-center text-sm font-medium border transition-colors ${
-                        isSelected
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                          : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <div className="text-[10px] uppercase opacity-60">{format(day, 'EEE')}</div>
-                      <div className="text-sm font-semibold">{format(day, 'd')}</div>
-                      <div className="text-[10px] opacity-60">{format(day, 'MMM')}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <Input
-              label="Date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-            />
-          )}
-        </>
+      {/* Date picker */}
+      {group.startDate && group.endDate ? (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Date{!isRegularExpense && <span className="text-gray-400 font-normal"> (optional)</span>}
+          </label>
+          <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+            {!isRegularExpense && (
+              <button
+                type="button"
+                onClick={() => setDate('')}
+                className={`shrink-0 w-16 py-2 rounded-lg text-center text-sm font-medium border transition-colors ${
+                  !date
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div className="text-[10px] uppercase opacity-60">&nbsp;</div>
+                <div className="text-sm font-semibold">—</div>
+                <div className="text-[10px] opacity-60">None</div>
+              </button>
+            )}
+            {eachDayOfInterval({
+              start: parseISO(group.startDate),
+              end: parseISO(group.endDate),
+            }).map((day) => {
+              const dayStr = format(day, 'yyyy-MM-dd');
+              const isSelected = date === dayStr;
+              return (
+                <button
+                  key={dayStr}
+                  type="button"
+                  onClick={() => setDate(dayStr)}
+                  className={`shrink-0 w-16 py-2 rounded-lg text-center text-sm font-medium border transition-colors ${
+                    isSelected
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <div className="text-[10px] uppercase opacity-60">{format(day, 'EEE')}</div>
+                  <div className="text-sm font-semibold">{format(day, 'd')}</div>
+                  <div className="text-[10px] opacity-60">{format(day, 'MMM')}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <Input
+          label={isRegularExpense ? 'Date' : 'Date (optional)'}
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          required={isRegularExpense}
+        />
       )}
 
-      {/* Category — only for expense and prepaid */}
-      {expenseType !== 'advance' && (
-        <CategoryPicker value={category} onChange={setCategory} />
-      )}
+      <CategoryPicker value={category} onChange={setCategory} />
 
       {/* Payment Method */}
       <div>
@@ -306,7 +316,7 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {expenseType === 'advance' ? 'Collected by' : 'Paid by'}
+          Paid by
         </label>
         <select
           value={paidBy}
@@ -324,7 +334,7 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {expenseType === 'advance' ? 'Collect from' : 'Split between'}
+          Split between
         </label>
         <div className="flex flex-wrap gap-2">
           {group.memberIds.map((uid) => (
@@ -358,9 +368,7 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
       )}
 
       <Button type="submit" loading={loading} className="w-full">
-        {expenseType === 'advance' ? 'Record Advance' :
-         expenseType === 'prepaid' ? 'Add Pre-paid' :
-         'Add Expense'}
+        {expenseType === 'prepaid' ? 'Add Pre-paid' : 'Add Expense'}
       </Button>
     </form>
   );

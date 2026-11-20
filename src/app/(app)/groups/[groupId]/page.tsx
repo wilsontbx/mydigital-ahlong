@@ -83,10 +83,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           <Link href={`/groups/${groupId}/expenses/new`}>
             <Button size="sm">+ Expense</Button>
           </Link>
-          <Link href={`/groups/${groupId}/settle`}>
-            <Button variant="secondary" size="sm">Settle Up</Button>
-          </Link>
-          <Link href={`/groups/${groupId}/reports`}>
+<Link href={`/groups/${groupId}/reports`}>
             <Button variant="ghost" size="sm">Reports</Button>
           </Link>
         </div>

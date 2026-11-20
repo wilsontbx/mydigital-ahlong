@@ -66,13 +66,9 @@ export default function ExpenseItem({ expense, members, currency, groupId, curre
             {expense.description}
           </h4>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-            {expense.expenseType && expense.expenseType !== 'expense' && (
-              <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
-                expense.expenseType === 'prepaid'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                  : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
-              }`}>
-                {expense.expenseType === 'prepaid' ? '📋 Pre-paid' : '💰 Advance'}
+            {expense.expenseType === 'prepaid' && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                📋 Pre-paid
               </span>
             )}
             <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
