@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { formatCurrency } from '@/lib/utils/currency';
 import { getCurrencySymbol } from '@/lib/utils/currencies';
 import { deleteExpense } from '@/lib/services/expenseService';
+import { getExpenseDates, formatDateShort } from '@/lib/utils/dateFormat';
 import toast from 'react-hot-toast';
 import type { Expense, GroupMember } from '@/lib/types';
 
@@ -81,6 +82,7 @@ export default function ExpenseItem({ expense, members, currency, groupId, curre
             )}
             <span className="text-[11px] text-gray-400 dark:text-gray-500">
               {isYouPaid ? 'You paid' : `${paidByName} paid`} · {participantCount} pax
+              {getExpenseDates(expense).length > 0 && ` · ${formatDateShort(getExpenseDates(expense))}`}
             </span>
           </div>
         </div>

@@ -7,6 +7,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+}
+
 interface ExpenseData {
   description: string;
   amount: number;
@@ -50,11 +54,11 @@ export async function addExpense(groupId: string, data: ExpenseData): Promise<st
       currentBalances[uid][payer] = (currentBalances[uid][payer] || 0) - balanceAmount;
     }
 
-    transaction.set(expenseRef, {
+    transaction.set(expenseRef, stripUndefined({
       ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }));
 
     transaction.update(groupRef, {
       balances: currentBalances,
@@ -108,10 +112,10 @@ export async function updateExpense(
       currentBalances[uid][newData.paidBy] = (currentBalances[uid][newData.paidBy] || 0) - balanceAmount;
     }
 
-    transaction.update(expenseRef, {
+    transaction.update(expenseRef, stripUndefined({
       ...newData,
       updatedAt: serverTimestamp(),
-    });
+    }));
 
     transaction.update(groupRef, {
       balances: currentBalances,

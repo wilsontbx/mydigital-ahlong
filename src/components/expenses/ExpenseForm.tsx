@@ -120,7 +120,7 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         splitType,
         splits: finalSplits,
         participants,
-        dates: dates.length > 0 ? dates : undefined,
+        dates: dates.length > 0 ? dates : [],
         createdBy: user.uid,
       });
       toast.success(

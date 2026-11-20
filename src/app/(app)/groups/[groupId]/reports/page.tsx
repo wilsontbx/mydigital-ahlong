@@ -40,14 +40,25 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
     }, { description: '', amount: 0 });
 
     const dailyTotals: Record<string, number> = {};
+    let undatedTotal = 0;
     expenses.forEach((e) => {
       const expDates = getExpenseDates(e);
-      if (expDates.length === 0) return;
-      const perDay = (e.baseCurrencyAmount || e.amount) / expDates.length;
+      const amt = e.baseCurrencyAmount || e.amount;
+      if (expDates.length === 0) {
+        undatedTotal += amt;
+        return;
+      }
+      const perDay = amt / expDates.length;
       expDates.forEach((key) => {
         dailyTotals[key] = (dailyTotals[key] || 0) + perDay;
       });
     });
+    if (undatedTotal > 0 && days) {
+      const spreadPerDay = undatedTotal / days;
+      for (const key of Object.keys(dailyTotals)) {
+        dailyTotals[key] += spreadPerDay;
+      }
+    }
     const topDay = Object.entries(dailyTotals).reduce(
       (max, [day, total]) => (total > max.total ? { day, total } : max),
       { day: '', total: 0 }

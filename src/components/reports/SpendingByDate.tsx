@@ -16,10 +16,16 @@ interface Props {
 export default function SpendingByDate({ expenses, currency, startDate, endDate }: Props) {
   const dailyTotals: Record<string, number> = {};
 
+  let undatedTotal = 0;
+
   expenses.forEach((e) => {
     const expDates = getExpenseDates(e);
-    if (expDates.length === 0) return;
-    const perDay = (e.baseCurrencyAmount || e.amount) / expDates.length;
+    const amt = e.baseCurrencyAmount || e.amount;
+    if (expDates.length === 0) {
+      undatedTotal += amt;
+      return;
+    }
+    const perDay = amt / expDates.length;
     expDates.forEach((key) => {
       dailyTotals[key] = (dailyTotals[key] || 0) + perDay;
     });
@@ -28,15 +34,14 @@ export default function SpendingByDate({ expenses, currency, startDate, endDate 
   let data: { date: string; label: string; total: number }[];
 
   if (startDate && endDate) {
-    data = eachDayOfInterval({
-      start: parseISO(startDate),
-      end: parseISO(endDate),
-    }).map((day) => {
+    const allDays = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
+    const spreadPerDay = undatedTotal > 0 ? undatedTotal / allDays.length : 0;
+    data = allDays.map((day) => {
       const key = format(day, 'yyyy-MM-dd');
       return {
         date: key,
         label: format(day, 'd MMM'),
-        total: Math.round((dailyTotals[key] || 0) * 100) / 100,
+        total: Math.round(((dailyTotals[key] || 0) + spreadPerDay) * 100) / 100,
       };
     });
   } else {
