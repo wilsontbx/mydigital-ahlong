@@ -37,7 +37,7 @@ export default function ExpenseForm({ group, groupId, expense }: ExpenseFormProp
   const [amount, setAmount] = useState(expense ? String(expense.amount) : '');
   const [currency, setCurrency] = useState(expense?.currency || group.currency);
   const [category, setCategory] = useState(expense?.category || 'Food & Drinks');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod || 'cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod || 'card');
   const [paidBy, setPaidBy] = useState(expense?.paidBy || user?.uid || '');
   const [splitType, setSplitType] = useState<SplitType>(expense?.splitType || 'equal');
   const [participants, setParticipants] = useState<string[]>(
