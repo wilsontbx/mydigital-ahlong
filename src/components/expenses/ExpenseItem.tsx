@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/currency';
 import { getCurrencySymbol } from '@/lib/utils/currencies';
 import { deleteExpense } from '@/lib/services/expenseService';
@@ -102,7 +103,9 @@ export default function ExpenseItem({ expense, members, currency, groupId, curre
               {formatCurrency(expense.amount, currency)}
             </span>
           )}
-          {currentUserId && myShare > 0 && (
+          {/* Payer sees what they lent (even if they're not in the split, e.g. A pays 100 for B only);
+              others see what they owe. */}
+          {currentUserId && (isYouPaid ? totalAmount - myShare > 0.005 : myShare > 0) && (
             <p className={`text-[11px] mt-0.5 ${
               isYouPaid
                 ? 'text-emerald-600 dark:text-emerald-400'
@@ -130,18 +133,29 @@ export default function ExpenseItem({ expense, members, currency, groupId, curre
           </div>
 
           {/* Actions */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm('Delete this expense? Balances will be updated.')) {
-                handleDelete();
-              }
-            }}
-            disabled={deleting}
-            className="text-xs px-3 py-1.5 rounded-lg text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 transition-colors"
-          >
-            {deleting ? 'Deleting...' : 'Delete expense'}
-          </button>
+          <div className="flex gap-2">
+            {expense.id && (
+              <Link
+                href={`/groups/${groupId}/expenses/${expense.id}/edit`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs px-3 py-1.5 rounded-lg text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+              >
+                Edit expense
+              </Link>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm('Delete this expense? Balances will be updated.')) {
+                  handleDelete();
+                }
+              }}
+              disabled={deleting}
+              className="text-xs px-3 py-1.5 rounded-lg text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 transition-colors"
+            >
+              {deleting ? 'Deleting...' : 'Delete expense'}
+            </button>
+          </div>
         </div>
       )}
     </div>

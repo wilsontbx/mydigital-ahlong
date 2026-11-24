@@ -3,21 +3,24 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { addExpense } from '@/lib/services/expenseService';
+import { addExpense, updateExpense } from '@/lib/services/expenseService';
 import { calculateEqualSplit, validateExactSplit } from '@/lib/utils/splitCalculator';
 import { formatCurrency } from '@/lib/utils/currency';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { getCurrencyInfo } from '@/lib/utils/currencies';
+import { getExpenseDates } from '@/lib/utils/dateFormat';
 import CategoryPicker from './CategoryPicker';
 import SplitSelector from './SplitSelector';
 import toast from 'react-hot-toast';
-import type { Group, SplitType, PaymentMethod, ExpenseType } from '@/lib/types';
+import type { Group, SplitType, PaymentMethod, ExpenseType, Expense } from '@/lib/types';
 
 interface ExpenseFormProps {
   group: Group;
   groupId: string;
+  /** When provided, the form edits this expense instead of creating a new one. */
+  expense?: Expense;
 }
 
 const EXPENSE_TYPES: { value: ExpenseType; label: string; icon: string; desc: string }[] = [
@@ -25,21 +28,25 @@ const EXPENSE_TYPES: { value: ExpenseType; label: string; icon: string; desc: st
   { value: 'prepaid', label: 'Pre-paid', icon: '📋', desc: 'Booked before the trip (flight, hotel, etc.)' },
 ];
 
-export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
+export default function ExpenseForm({ group, groupId, expense }: ExpenseFormProps) {
   const { user } = useAuth();
   const router = useRouter();
-  const [expenseType, setExpenseType] = useState<ExpenseType>('expense');
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(group.currency);
-  const [category, setCategory] = useState('Food & Drinks');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-  const [paidBy, setPaidBy] = useState(user?.uid || '');
-  const [splitType, setSplitType] = useState<SplitType>('equal');
-  const [participants, setParticipants] = useState<string[]>(group.memberIds);
-  const [splits, setSplits] = useState<Record<string, number>>({});
+  const isEdit = !!expense?.id;
+  const [expenseType, setExpenseType] = useState<ExpenseType>(expense?.expenseType || 'expense');
+  const [description, setDescription] = useState(expense?.description || '');
+  const [amount, setAmount] = useState(expense ? String(expense.amount) : '');
+  const [currency, setCurrency] = useState(expense?.currency || group.currency);
+  const [category, setCategory] = useState(expense?.category || 'Food & Drinks');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod || 'cash');
+  const [paidBy, setPaidBy] = useState(expense?.paidBy || user?.uid || '');
+  const [splitType, setSplitType] = useState<SplitType>(expense?.splitType || 'equal');
+  const [participants, setParticipants] = useState<string[]>(
+    expense?.participants?.length ? expense.participants : group.memberIds
+  );
+  const [splits, setSplits] = useState<Record<string, number>>(expense?.splits || {});
   const [loading, setLoading] = useState(false);
   const [dates, setDates] = useState<string[]>(() => {
+    if (expense) return getExpenseDates(expense);
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (group.startDate && group.endDate) {
@@ -61,7 +68,13 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
 
   const isDifferentCurrency = currency !== group.currency;
   const numAmount = parseFloat(amount) || 0;
-  const numRate = isDifferentCurrency ? (group.exchangeRates?.[currency] || 1) : 1;
+  // Keep the expense's original rate when editing without changing currency,
+  // so later changes to the group's rates don't silently re-price it.
+  const numRate = !isDifferentCurrency
+    ? 1
+    : isEdit && expense && currency === expense.currency && expense.exchangeRate
+      ? expense.exchangeRate
+      : (group.exchangeRates?.[currency] || 1);
   const baseCurrencyAmount = isDifferentCurrency
     ? Math.round(numAmount * numRate * 100) / 100
     : numAmount;
@@ -107,7 +120,7 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
 
     setLoading(true);
     try {
-      await addExpense(groupId, {
+      const data = {
         description,
         amount: numAmount,
         currency,
@@ -121,14 +134,32 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         splits: finalSplits,
         participants,
         dates: dates.length > 0 ? dates : [],
-        createdBy: user.uid,
-      });
-      toast.success(
-        expenseType === 'prepaid' ? 'Pre-paid expense added!' : 'Expense added!'
-      );
+        createdBy: expense?.createdBy || user.uid,
+      };
+      if (isEdit && expense?.id) {
+        await updateExpense(groupId, expense.id, {
+          description: expense.description,
+          amount: expense.amount,
+          currency: expense.currency,
+          exchangeRate: expense.exchangeRate || 1,
+          baseCurrencyAmount: expense.baseCurrencyAmount || expense.amount,
+          category: expense.category,
+          paidBy: expense.paidBy,
+          splitType: expense.splitType,
+          splits: expense.splits,
+          participants: expense.participants,
+          createdBy: expense.createdBy,
+        }, data);
+        toast.success('Expense updated!');
+      } else {
+        await addExpense(groupId, data);
+        toast.success(
+          expenseType === 'prepaid' ? 'Pre-paid expense added!' : 'Expense added!'
+        );
+      }
       router.push(`/groups/${groupId}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add expense');
+      toast.error(err instanceof Error ? err.message : isEdit ? 'Failed to update expense' : 'Failed to add expense');
     } finally {
       setLoading(false);
     }
@@ -305,8 +336,8 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
         </label>
         <div className="flex flex-wrap gap-2">
           {([
-            { value: 'cash', label: '💵 Cash' },
             { value: 'card', label: '💳 Card' },
+            { value: 'cash', label: '💵 Cash' },
             { value: 'ewallet', label: '📱 E-Wallet' },
             { value: 'transfer', label: '🏦 Transfer' },
             { value: 'other', label: '📝 Other' },
@@ -381,7 +412,7 @@ export default function ExpenseForm({ group, groupId }: ExpenseFormProps) {
       )}
 
       <Button type="submit" loading={loading} className="w-full">
-        {expenseType === 'prepaid' ? 'Add Pre-paid' : 'Add Expense'}
+        {isEdit ? 'Save Changes' : expenseType === 'prepaid' ? 'Add Pre-paid' : 'Add Expense'}
       </Button>
     </form>
   );

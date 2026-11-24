@@ -34,7 +34,12 @@ export default function SplitSelector({
 }: SplitSelectorProps) {
   const [percentages, setPercentages] = useState<Record<string, number>>(() =>
     participants.reduce((acc, uid) => {
-      acc[uid] = participants.length > 0 ? Math.round((100 / participants.length) * 100) / 100 : 0;
+      // When editing a percentage split, derive percentages from the saved amounts
+      if (splitType === 'percentage' && amount > 0 && splits[uid] !== undefined) {
+        acc[uid] = Math.round((splits[uid] / amount) * 100 * 100) / 100;
+      } else {
+        acc[uid] = participants.length > 0 ? Math.round((100 / participants.length) * 100) / 100 : 0;
+      }
       return acc;
     }, {} as Record<string, number>)
   );

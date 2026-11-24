@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, doc, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import type { Expense } from '../types';
 
@@ -44,4 +44,27 @@ export function useExpenses(groupId: string | null) {
   }, [groupId]);
 
   return { expenses, loading };
+}
+
+export function useExpense(groupId: string, expenseId: string) {
+  const [expense, setExpense] = useState<Expense | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, 'groups', groupId, 'expenses', expenseId),
+      (snap) => {
+        setExpense(snap.exists() ? ({ id: snap.id, ...snap.data() } as Expense) : null);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Expense listener error:', error);
+        setLoading(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [groupId, expenseId]);
+
+  return { expense, loading };
 }
