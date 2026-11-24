@@ -1,11 +1,14 @@
 import {
   collection,
   doc,
+  getDocsFromServer,
   runTransaction,
   serverTimestamp,
   increment,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { computeBalancesFromExpenses, type Balances } from '../utils/balanceCalculator';
+import type { Expense } from '../types';
 
 function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
@@ -155,6 +158,33 @@ export async function deleteExpense(
     transaction.update(groupRef, {
       balances: currentBalances,
       totalExpenses: increment(-expenseData.baseCurrencyAmount),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+/** Load every expense in the group straight from the server and recompute balances. */
+export async function recalculateBalances(groupId: string): Promise<{
+  balances: Balances;
+  totalExpenses: number;
+  expenseCount: number;
+}> {
+  const snap = await getDocsFromServer(collection(db, 'groups', groupId, 'expenses'));
+  const expenses = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense);
+  const { balances, totalExpenses } = computeBalancesFromExpenses(expenses);
+  return { balances, totalExpenses, expenseCount: expenses.length };
+}
+
+/** Overwrite the group's stored balances and total with values recalculated from all expenses. */
+export async function fixBalances(groupId: string): Promise<void> {
+  const { balances, totalExpenses } = await recalculateBalances(groupId);
+  const groupRef = doc(db, 'groups', groupId);
+  await runTransaction(db, async (transaction) => {
+    const groupSnap = await transaction.get(groupRef);
+    if (!groupSnap.exists()) throw new Error('Group not found');
+    transaction.update(groupRef, {
+      balances,
+      totalExpenses: Math.round(totalExpenses * 100) / 100,
       updatedAt: serverTimestamp(),
     });
   });

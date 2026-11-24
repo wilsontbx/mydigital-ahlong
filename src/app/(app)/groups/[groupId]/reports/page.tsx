@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useMemo } from 'react';
+import { use, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
 import { useGroup } from '@/lib/hooks/useGroup';
@@ -13,11 +13,44 @@ import SpendingByCategory from '@/components/reports/SpendingByCategory';
 import SpendingByPerson from '@/components/reports/SpendingByPerson';
 import SpendingByPayment from '@/components/reports/SpendingByPayment';
 import SpendingByDate from '@/components/reports/SpendingByDate';
+import type { Expense } from '@/lib/types';
+
+const ALL = 'all';
 
 export default function ReportsPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = use(params);
   const { group, loading: groupLoading } = useGroup(groupId);
-  const { expenses, loading: expensesLoading } = useExpenses(groupId);
+  const { expenses: allExpenses, loading: expensesLoading } = useExpenses(groupId);
+  const [person, setPerson] = useState<string>(ALL);
+  const isPersonView = person !== ALL;
+
+  // Person view: keep only expenses the person shares in, and count only their share.
+  // Every chart below then shows that person's spending without needing its own filter.
+  const expenses = useMemo<Expense[]>(() => {
+    if (!isPersonView) return allExpenses;
+    return allExpenses
+      .filter((e) => (e.splits?.[person] || 0) > 0)
+      .map((e) => {
+        const share = e.splits[person];
+        return {
+          ...e,
+          amount: share,
+          baseCurrencyAmount: share,
+          currency: group?.currency || e.currency,
+          exchangeRate: 1,
+          participants: [person],
+          splits: { [person]: share },
+        };
+      });
+  }, [allExpenses, person, isPersonView, group?.currency]);
+
+  // What the selected person paid out of their own pocket (full amounts, for anyone).
+  const personPaid = useMemo(
+    () => isPersonView
+      ? allExpenses.filter((e) => e.paidBy === person).reduce((sum, e) => sum + (e.baseCurrencyAmount || e.amount), 0)
+      : 0,
+    [allExpenses, person, isPersonView]
+  );
 
   const stats = useMemo(() => {
     if (!group || expenses.length === 0) return null;
@@ -75,6 +108,8 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
     return <div className="text-center py-20"><p>Group not found</p></div>;
   }
 
+  const personName = isPersonView ? group.members[person]?.displayName || 'Unknown' : '';
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -91,11 +126,38 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
         )}
       </div>
 
+      {/* Person switcher */}
+      {allExpenses.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {[ALL, ...group.memberIds].map((id) => {
+            const active = person === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPerson(id)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  active
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                {id === ALL ? 'Everyone' : group.members[id]?.displayName || 'Unknown'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {expenses.length === 0 ? (
         <div className="text-center py-16">
           <div className="text-4xl mb-3">📊</div>
-          <p className="text-gray-500 dark:text-gray-400 font-medium">No expenses yet</p>
-          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Add some expenses to see your reports.</p>
+          <p className="text-gray-500 dark:text-gray-400 font-medium">
+            {isPersonView ? `No expenses for ${personName}` : 'No expenses yet'}
+          </p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+            {isPersonView ? 'They are not part of any expense split yet.' : 'Add some expenses to see your reports.'}
+          </p>
         </div>
       ) : (
         <>
@@ -106,13 +168,15 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
                 <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
                 <div className="absolute bottom-0 left-0 -mb-6 -ml-6 w-24 h-24 bg-white/10 rounded-full blur-xl" />
                 <div className="relative">
-                  <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Total Spent</p>
+                  <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">
+                    {isPersonView ? `${personName}'s Spending` : 'Total Spent'}
+                  </p>
                   <p className="text-2xl sm:text-4xl font-extrabold mt-1 tracking-tight">
                     {formatCurrency(stats.totalSpent, group.currency)}
                   </p>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-sm text-emerald-100">
                     <span>{stats.count} expenses</span>
-                    <span>{stats.memberCount} members</span>
+                    {!isPersonView && <span>{stats.memberCount} members</span>}
                     {stats.avgPerDay && (
                       <span>{formatCurrency(stats.avgPerDay, group.currency)}/day</span>
                     )}
@@ -122,12 +186,21 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
 
               {/* Quick stats */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <StatCard
-                  label="Per Person"
-                  value={formatCurrency(stats.avgPerPerson, group.currency)}
-                  subtext={`${stats.memberCount} members`}
-                  accent="blue"
-                />
+                {isPersonView ? (
+                  <StatCard
+                    label="Paid Out"
+                    value={formatCurrency(personPaid, group.currency)}
+                    subtext="Paid from own pocket"
+                    accent="blue"
+                  />
+                ) : (
+                  <StatCard
+                    label="Per Person"
+                    value={formatCurrency(stats.avgPerPerson, group.currency)}
+                    subtext={`${stats.memberCount} members`}
+                    accent="blue"
+                  />
+                )}
                 <StatCard
                   label="Per Expense"
                   value={formatCurrency(stats.avgPerExpense, group.currency)}
@@ -190,6 +263,9 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
               currency={group.currency}
               startDate={group.startDate}
               endDate={group.endDate}
+              members={group.members}
+              memberIds={group.memberIds}
+              showPeople={!isPersonView}
             />
           </div>
 
@@ -201,7 +277,9 @@ export default function ReportsPage({ params }: { params: Promise<{ groupId: str
                 <SpendingByCategory expenses={expenses} currency={group.currency} />
                 <SpendingByPayment expenses={expenses} currency={group.currency} />
               </div>
-              <SpendingByPerson expenses={expenses} members={group.members} currency={group.currency} />
+              {!isPersonView && (
+                <SpendingByPerson expenses={expenses} members={group.members} currency={group.currency} />
+              )}
             </div>
           </div>
         </>

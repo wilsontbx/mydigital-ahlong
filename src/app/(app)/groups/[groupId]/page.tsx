@@ -13,6 +13,7 @@ import InviteCodeDisplay from '@/components/groups/InviteCodeDisplay';
 import MemberList from '@/components/groups/MemberList';
 import ExpenseList from '@/components/expenses/ExpenseList';
 import BalanceSummary from '@/components/balances/BalanceSummary';
+import VerifyBalancesButton from '@/components/balances/VerifyBalancesButton';
 
 export default function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = use(params);
@@ -91,7 +92,10 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
 
       {/* Balances card - always visible at top on mobile */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Balances</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Balances</h3>
+          <VerifyBalancesButton group={group} groupId={groupId} />
+        </div>
         <BalanceSummary
           balances={group.balances || {}}
           members={group.members}
